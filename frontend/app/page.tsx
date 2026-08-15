@@ -1,0 +1,8 @@
+"use client";
+import {useState} from "react";
+const API=process.env.NEXT_PUBLIC_API_URL||"http://127.0.0.1:8000";
+export default function Home(){const[url,setUrl]=useState("");const[id,setId]=useState<number|null>(null);const[q,setQ]=useState("");const[a,setA]=useState("");const[b,setB]=useState(false);
+async function connect(){setB(true);const r=await fetch(`${API}/repositories`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,branch:"main"})});const d=await r.json();setId(d.id);setB(false)}
+async function index(){if(!id)return;setB(true);const r=await fetch(`${API}/repositories/${id}/index`,{method:"POST"});const d=await r.json();setA(JSON.stringify(d,null,2));setB(false)}
+async function ask(){if(!id)return;setB(true);const r=await fetch(`${API}/chat`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({repository_id:id,message:q})});const d=await r.json();setA(d.answer||d.detail);setB(false)}
+return <main style={{maxWidth:900,margin:"40px auto",padding:20,fontFamily:"system-ui"}}><h1>AI Engineer Copilot</h1><p>Connect, index and interrogate a GitHub codebase.</p><div style={{display:"flex",gap:8}}><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://github.com/user/repository" style={{flex:1,padding:12}}/><button onClick={connect} disabled={b||!url}>Connect</button><button onClick={index} disabled={b||!id}>Index</button></div><textarea value={q} onChange={e=>setQ(e.target.value)} placeholder="How does authentication work?" style={{width:"100%",minHeight:120,marginTop:20,padding:12}}/><button onClick={ask} disabled={b||!id||!q}>Ask Copilot</button><pre style={{whiteSpace:"pre-wrap",background:"#f5f5f5",padding:20,marginTop:20}}>{a}</pre></main>}
