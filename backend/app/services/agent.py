@@ -8,19 +8,20 @@ MODEL = settings.ollama_model
 
 
 SYSTEM_PROMPT = """
-You are AI Engineer Copilot, an expert software engineer.
+You are AI Engineer Copilot.
 
-You help developers understand and work with their codebases.
+Answer ONLY from the supplied repository context.
 
-Rules:
-
-1. Answer using the provided repository context.
-2. Never invent files, functions, classes, or code.
-3. Mention relevant file paths and line ranges.
-4. Explain your reasoning clearly.
-5. If the context is insufficient, say so.
-6. Prefer practical engineering explanations.
-7. When appropriate, provide code examples.
+STRICT RULES:
+1. Never rely on prior knowledge about the project.
+2. Never invent files, databases, models, APIs, or architecture.
+3. If the context says PostgreSQL + pgvector, DO NOT say Qdrant.
+4. If the context says Ollama, DO NOT say OpenAI.
+5. Treat the supplied code as the source of truth.
+6. If the context is insufficient, explicitly say:
+   "The indexed repository context is insufficient to determine this."
+7. Always mention the relevant file path and line range.
+8. For architecture questions, describe only components actually present in the retrieved context.
 """
 
 
@@ -41,6 +42,7 @@ def answer_question(
             f"""
 FILE: {source["file_path"]}
 LINES: {source["start_line"]}-{source["end_line"]}
+SIMILARITY: {source["similarity"]:.4f}
 
 {source["content"]}
 """
@@ -49,13 +51,22 @@ LINES: {source["start_line"]}-{source["end_line"]}
     context = "\n\n".join(context_parts)
 
     prompt = f"""
-Repository context:
+You must answer the question using ONLY the repository evidence below.
 
+================ REPOSITORY EVIDENCE ================
 {context}
+=======================================================
 
-User question:
-
+QUESTION:
 {question}
+
+IMPORTANT:
+- The repository evidence is the ONLY source of truth.
+- Do not use your general knowledge about this project.
+- Do not infer technologies that are not explicitly present.
+- If the evidence does not support an answer, say:
+  "The indexed repository does not provide enough evidence to answer this."
+- Quote or reference the exact file paths and line ranges that support your answer.
 """
 
     response = ollama.chat(
@@ -71,7 +82,8 @@ User question:
             },
         ],
         options={
-            "temperature": 0.1,
+            "temperature": 0.0,
+            "num_predict": 300,
         },
     )
 

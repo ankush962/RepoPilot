@@ -1,42 +1,53 @@
 # AI Engineer Copilot
 
-Portfolio-grade MVP for repository intelligence: GitHub ingestion, code chunking, PostgreSQL metadata, OpenAI embeddings, Qdrant retrieval, grounded LLM answers, and a minimal Next.js UI.
+A portfolio-grade, local-first AI codebase intelligence platform.
 
-## Backend
+## Stack
+
+- **Frontend:** Next.js + React
+- **Backend:** FastAPI + Python
+- **LLM:** Ollama + Qwen 2.5 Coder 7B
+- **Embeddings:** Ollama + nomic-embed-text
+- **Database:** PostgreSQL + pgvector
+- **Repository ingestion:** GitPython
+- **Retrieval:** PostgreSQL vector similarity search
+
+## Run locally
+
+### Backend
+
 ```bash
 cd backend
-python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# add OPENAI_API_KEY to .env
 uvicorn app.main:app --reload
 ```
 
-## Qdrant
-```bash
-docker compose up -d qdrant
-```
+The API runs on `http://127.0.0.1:8000`.
 
-## PostgreSQL
-Use your existing local PostgreSQL and `ai_copilot` database, or the compose service.
+### Frontend
 
-## Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open `http://localhost:3000`.
 
 ## Workflow
-1. Start PostgreSQL and Qdrant.
-2. Set `OPENAI_API_KEY` in `backend/.env`.
-3. Start FastAPI.
-4. Connect a public GitHub repository.
-5. Click Index.
-6. Ask questions.
 
-## Next production upgrades
-Authentication, GitHub OAuth/App, background jobs, Tree-sitter AST parsing, hybrid retrieval, reranking, LangGraph tool calling, sandboxed test execution, evaluation suite, streaming, observability and deployment.
+1. Start PostgreSQL.
+2. Make sure Ollama is running with `qwen2.5-coder:7b` and `nomic-embed-text`.
+3. Open the frontend.
+4. Connect a public GitHub repository.
+5. Index it.
+6. Ask Copilot questions about the codebase.
+7. Inspect the retrieved source files and line ranges.
+
+## Privacy
+
+The default setup uses local Ollama inference and local PostgreSQL/pgvector. No OpenAI API key is required for the current implementation.
+
+## Production roadmap
+
+Authentication, GitHub OAuth/App, background indexing jobs, AST-aware chunking, hybrid retrieval, reranking, tool calling, sandboxed test execution, evaluation, streaming, observability and deployment.
