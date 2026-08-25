@@ -1,12 +1,18 @@
 from datetime import datetime
-from pydantic import BaseModel, HttpUrl, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, HttpUrl
+
 
 class RepositoryCreate(BaseModel):
     url: HttpUrl
     branch: str = "main"
 
+
 class RepositoryResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
     id: int
     name: str
     url: str
@@ -14,9 +20,11 @@ class RepositoryResponse(BaseModel):
     status: str
     created_at: datetime
 
+
 class ChatRequest(BaseModel):
     repository_id: int
     message: str
+
 
 class Source(BaseModel):
     file_path: str
@@ -24,6 +32,16 @@ class Source(BaseModel):
     end_line: int
     content: str
 
+
+class Metrics(BaseModel):
+    sources: int
+    average_similarity: float
+    top_similarity: float
+    latency_seconds: float
+    grounding: str
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[Source]
+    metrics: Metrics
