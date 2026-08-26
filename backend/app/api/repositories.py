@@ -177,25 +177,25 @@ def repository_status(
 @router.post(
     "/{repository_id}/index",
 )
+@router.post(
+    "/{repository_id}/index",
+)
 def index(
     repository_id: int,
     db: Session = Depends(get_db),
 ):
-
     repo = db.get(
         Repository,
         repository_id,
     )
 
     if not repo:
-
         raise HTTPException(
             404,
             "Repository not found",
         )
 
     try:
-
         count = index_repository(
             db,
             repo,
@@ -208,7 +208,6 @@ def index(
 
         # Nothing changed and vectors are healthy.
         if count == 0 and not needs_vectors:
-
             return {
                 "status": "up_to_date",
                 "chunks": 0,
@@ -227,9 +226,9 @@ def index(
         vector_count = 0
 
         if chunks:
-
             vector_count = upsert_chunks(
-                chunks
+                repository_id,
+                chunks,
             )
 
         return {
@@ -240,9 +239,7 @@ def index(
         }
 
     except Exception as exc:
-
         repo.status = "error"
-
         db.commit()
 
         raise HTTPException(

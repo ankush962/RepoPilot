@@ -18,12 +18,8 @@ def repository_name(url: str) -> str:
 
 
 def get_remote_commit(repo: Repo, branch: str) -> str:
-    """
-    Return the latest commit for the selected branch.
-    """
-
+    """Return the latest commit for the selected branch."""
     repo.git.fetch("origin", branch)
-
     return repo.commit(f"origin/{branch}").hexsha
 
 
@@ -32,19 +28,14 @@ def index_repository(
     repository: Repository,
 ):
     """
-    Clone/update repository and index its code.
+    Clone/update repository and create code chunks.
 
-    Returns number of chunks processed.
-
-    If the remote commit hasn't changed since the previous
-    indexing operation, no work is performed.
+    Embeddings are generated separately by vector_store.upsert_chunks().
+    Returns the number of chunks created.
     """
 
     workspace = Path(settings.workspace_dir).resolve()
-    workspace.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    workspace.mkdir(parents=True, exist_ok=True)
 
     destination = workspace / f"repo_{repository.id}"
 
@@ -56,28 +47,23 @@ def index_repository(
         if destination.exists():
             repo = Repo(destination)
 
-            repo.git.fetch(
-                "origin",
-                repository.branch,
-            )
-
             remote_commit = get_remote_commit(
                 repo,
                 repository.branch,
             )
 
-            # Nothing changed.
+            # Repository has not changed.
             if (
                 repository.last_indexed_commit
                 and repository.last_indexed_commit == remote_commit
             ):
                 repository.status = "indexed"
+                repository.local_path = str(destination)
                 db.commit()
-
                 return 0
 
+            # Make local checkout match remote branch.
             repo.git.checkout(repository.branch)
-
             repo.git.reset(
                 "--hard",
                 f"origin/{repository.branch}",
@@ -98,7 +84,6 @@ def index_repository(
 
         repository.local_path = str(destination)
         repository.status = "indexing"
-
         db.commit()
 
         # ---------------------------------------------------------
@@ -107,7 +92,9 @@ def index_repository(
 
         db.query(CodeChunk).filter(
             CodeChunk.repository_id == repository.id
-        ).delete()
+        ).delete(
+            synchronize_session=False
+        )
 
         db.commit()
 
@@ -118,8 +105,13 @@ def index_repository(
         count = 0
 
         for file_path in iter_code_files(destination):
+            chunks = chunk_file(file_path)
 
-            for chunk in chunk_file(file_path):
+            for chunk in chunks:
+                content = chunk.get("content", "").strip()
+
+                if not content:
+                    continue
 
                 relative_path = str(
                     file_path.relative_to(destination)
@@ -131,11 +123,14 @@ def index_repository(
                         file_path=relative_path,
                         start_line=chunk["start_line"],
                         end_line=chunk["end_line"],
-                        content=chunk["content"],
+                        content=content,
                     )
                 )
 
                 count += 1
+
+        # Flush chunks so they exist in the DB before vector indexing.
+        db.commit()
 
         # ---------------------------------------------------------
         # SAVE INDEX STATE
@@ -149,6 +144,8 @@ def index_repository(
         return count
 
     except Exception:
+        db.rollback()
+
         repository.status = "error"
         db.commit()
 
@@ -158,7 +155,6 @@ def index_repository(
 def repository_needs_update(
     repository: Repository,
 ) -> bool:
-
     if not repository.local_path:
         return True
 

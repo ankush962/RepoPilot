@@ -1,8 +1,5 @@
-import re
-
 from sqlalchemy import text
 
-from app.config import settings
 from app.database import engine
 from app.services.embeddings import get_embedding
 
@@ -32,52 +29,61 @@ def get_embedding_for_text(text_value: str):
     return get_embedding(text_value)
 
 
-def index_chunks(chunks):
+def upsert_chunks(repository_id: int, chunks):
+    """
+    Generate embeddings for existing repository chunks
+    and update their embedding column.
+    """
+
     ensure_table()
+
+    updated = 0
 
     with engine.begin() as connection:
         for chunk in chunks:
-            embedding = get_embedding(chunk["content"])
+            content = chunk.content
+
+            if not content or not content.strip():
+                continue
+
+            embedding = get_embedding(content)
+
+            if not embedding:
+                continue
+
+            if len(embedding) != 768:
+                raise ValueError(
+                    f"Expected 768-dimensional embedding, got {len(embedding)}"
+                )
 
             connection.execute(
                 text(
                     """
-                    INSERT INTO code_chunks
-                    (
-                        repository_id,
-                        file_path,
-                        start_line,
-                        end_line,
-                        content,
-                        embedding
-                    )
-                    VALUES
-                    (
-                        :repository_id,
-                        :file_path,
-                        :start_line,
-                        :end_line,
-                        :content,
-                        CAST(:embedding AS vector)
-                    )
+                    UPDATE code_chunks
+                    SET embedding = CAST(:embedding AS vector)
+                    WHERE repository_id = :repository_id
+                      AND file_path = :file_path
+                      AND start_line = :start_line
+                      AND end_line = :end_line
                     """
                 ),
                 {
-                    "repository_id": chunk["repository_id"],
-                    "file_path": chunk["file_path"],
-                    "start_line": chunk["start_line"],
-                    "end_line": chunk["end_line"],
-                    "content": chunk["content"],
+                    "repository_id": repository_id,
+                    "file_path": chunk.file_path,
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
                     "embedding": str(embedding),
                 },
             )
+
+            updated += 1
+
+    return updated
 
 
 def _keyword_score(query: str, source: dict) -> float:
     """
     Lightweight lexical ranking on top of vector similarity.
-    This makes repository-level questions prefer documentation,
-    entrypoints, APIs and core services over package-lock/config noise.
     """
 
     q = query.lower()
@@ -121,8 +127,6 @@ def _keyword_score(query: str, source: dict) -> float:
         if "## privacy" in content:
             score += 0.05
 
-    # Configuration/build artifacts are poor evidence for
-    # "what does this project do?"
         if path.endswith("package-lock.json"):
             score -= 0.40
 
@@ -178,8 +182,9 @@ def _keyword_score(query: str, source: dict) -> float:
         if path.endswith(".css"):
             score += 0.08
 
-        if path.endswith("package.json"):
-            score += 0.05
+    # Package/config files are generally weaker evidence
+    if path.endswith("package.json"):
+        score += 0.05
 
     # Generic code questions
     if any(
@@ -204,50 +209,6 @@ def _keyword_score(query: str, source: dict) -> float:
     return score
 
 
-def upsert_chunks(
-    db,
-    repository_id: int,
-    chunks,
-):
-    """
-    Generate embeddings for repository chunks and persist them.
-
-    Expected chunk format:
-    {
-        "content": str,
-        "start_line": int,
-        "end_line": int,
-        "file_path": str,
-    }
-    """
-
-    from app.models import CodeChunk
-
-    inserted = 0
-
-    for chunk in chunks:
-        content = chunk["content"]
-
-        embedding = get_embedding(content)
-
-        row = CodeChunk(
-            repository_id=repository_id,
-            file_path=chunk["file_path"],
-            start_line=chunk["start_line"],
-            end_line=chunk["end_line"],
-            content=content,
-            embedding=embedding,
-        )
-
-        db.add(row)
-        inserted += 1
-
-    db.commit()
-
-    return inserted
-
-
-
 def search(
     query: str,
     repository_id: int,
@@ -257,7 +218,9 @@ def search(
 
     query_embedding = get_embedding(query)
 
-    # Retrieve more candidates than we finally return.
+    if not query_embedding or len(query_embedding) != 768:
+        return []
+
     candidate_limit = max(limit * 3, 30)
 
     with engine.begin() as connection:
@@ -274,6 +237,7 @@ def search(
                     ) AS similarity
                 FROM code_chunks
                 WHERE repository_id = :repository_id
+                  AND embedding IS NOT NULL
                 ORDER BY embedding <=> CAST(:embedding AS vector)
                 LIMIT :candidate_limit
                 """
@@ -285,24 +249,33 @@ def search(
             },
         )
 
-        sources = [
-            {
-                "file_path": row.file_path,
-                "start_line": row.start_line,
-                "end_line": row.end_line,
-                "content": row.content,
-                "similarity": float(row.similarity),
-            }
-            for row in result
-        ]
+        sources = []
 
-    # Hybrid ranking:
-    # vector similarity + lightweight repository-aware lexical ranking.
+        for row in result:
+            similarity = row.similarity
+
+            # Protect the agent from None values
+            if similarity is None:
+                similarity = 0.0
+
+            sources.append(
+                {
+                    "file_path": row.file_path,
+                    "start_line": row.start_line,
+                    "end_line": row.end_line,
+                    "content": row.content,
+                    "similarity": float(similarity),
+                }
+            )
+
+    # Hybrid ranking
     for source in sources:
         semantic_score = source["similarity"]
         keyword_score = _keyword_score(query, source)
 
-        source["_rank_score"] = semantic_score + keyword_score
+        source["_rank_score"] = (
+            semantic_score + keyword_score
+        )
 
     sources.sort(
         key=lambda item: item["_rank_score"],
