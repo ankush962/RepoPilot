@@ -2,771 +2,805 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const API =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
-type Repo = {
+type Repository = {
   id: number;
   name: string;
   url: string;
-  branch: string;
-  status: string;
-  created_at: string;
-  updated_at?: string;
+  branch?: string;
+  status?: string;
   last_indexed_commit?: string | null;
 };
 
 type Source = {
-  file_path: string;
-  start_line: number;
-  end_line: number;
-  content: string;
+  file_path?: string;
+  start_line?: number;
+  end_line?: number;
+  content?: string;
+  similarity?: number;
 };
 
-type Message = {
-  role: "user" | "assistant";
-  content: string;
+type ChatResponse = {
+  answer?: string;
+  response?: string;
+  message?: string;
+  content?: string;
   sources?: Source[];
+  grounded?: boolean;
+  [key: string]: unknown;
 };
 
-type BusyState =
-  | "connect"
-  | "index"
-  | "chat"
-  | "load"
-  | null;
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-function Icon({ name }: { name: string }) {
-  const paths: Record<string, string> = {
-    logo: "M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v9m0 0 8-4.5M12 12 4 7.5m8 0 8 4.5",
-    repo: "M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9ZM8 9.5l4 2.25 4-2.25M8 14l4 2.25L16 14",
-    index: "M12 3v12m0 0 4-4m-4 4-4-4M5 20h14",
-    send: "M3 11.5 21 3l-5.5 18-4-7.5L3 11.5Zm8.5 2L21 3",
-    file: "M6 3h8l4 4v14H6V3Zm8 0v5h4",
-    external: "M14 5h5v5m-1-4-9 9",
-    spark:
-      "M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3Z",
-  };
+const QUICK_PROMPTS = [
+  "What does this project do?",
+  "Explain the backend architecture.",
+  "Where is repository indexing implemented?",
+  "Find potential bugs or weak points.",
+  "What vector database and embedding model does this project use?",
+  "Explain how semantic search works.",
+];
 
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="icon"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d={paths[name] || paths.spark} />
-    </svg>
-  );
+function extractAnswer(data: ChatResponse | unknown): string {
+  if (typeof data === "string") return data;
+
+  if (!data || typeof data !== "object") {
+    return "I couldn't generate a response.";
+  }
+
+  const obj = data as Record<string, unknown>;
+
+  const candidates = [
+    obj.answer,
+    obj.response,
+    obj.message,
+    obj.content,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  // Prevent React from rendering "[object Object]".
+  if (obj.answer && typeof obj.answer === "object") {
+    const nested = obj.answer as Record<string, unknown>;
+
+    for (const key of ["answer", "response", "message", "content", "text"]) {
+      if (
+        typeof nested[key] === "string" &&
+        (nested[key] as string).trim()
+      ) {
+        return nested[key] as string;
+      }
+    }
+  }
+
+  return "The repository context was not sufficient to answer this question.";
+}
+
+function formatAnswer(text: string) {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export default function Home() {
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
 
-  const [url, setUrl] = useState("");
+  const [loadingRepos, setLoadingRepos] = useState(true);
+  const [indexing, setIndexing] = useState(false);
+  const [indexMessage, setIndexMessage] = useState("");
+
   const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<
+    {
+      role: "user" | "assistant";
+      content: string;
+      sources?: Source[];
+    }[]
+  >([]);
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sources, setSources] = useState<Source[]>([]);
+  const [asking, setAsking] = useState(false);
 
-  const [busy, setBusy] = useState<BusyState>(null);
+  const [showNewRepo, setShowNewRepo] = useState(false);
+  const [repoUrl, setRepoUrl] = useState("");
+  const [repoBranch, setRepoBranch] = useState("main");
+  const [connectingRepo, setConnectingRepo] = useState(false);
+  const [repoError, setRepoError] = useState("");
 
-  const [activity, setActivity] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const indexed = selectedRepo?.status === "indexed";
 
-  const [activeSource, setActiveSource] =
-    useState<Source | null>(null);
-
-  const selected = useMemo(
-    () => repos.find((r) => r.id === selectedId) || null,
-    [repos, selectedId]
-  );
-
-  async function request(
-    path: string,
-    options?: RequestInit
-  ) {
-    const res = await fetch(`${API}${path}`, options);
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      throw new Error(
-        data.detail || `Request failed (${res.status})`
-      );
-    }
-
-    return data;
-  }
-
-  async function loadRepos() {
-    setBusy("load");
-    setError("");
-
-    try {
-      const data: Repo[] = await request("/repositories");
-
-      setRepos(data);
-
-      if (data.length > 0 && selectedId === null) {
-        setSelectedId(data[0].id);
-      }
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Could not load repositories."
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
+  const statusLabel = useMemo(() => {
+    if (indexing) return "Indexing";
+    if (selectedRepo?.status === "error") return "Error";
+    if (indexed) return "Indexed";
+    return "Ready";
+  }, [indexing, indexed, selectedRepo]);
 
   useEffect(() => {
-    loadRepos();
+    loadRepositories();
   }, []);
 
-  async function connect() {
-    const repoUrl = url.trim();
-
-    if (!repoUrl) return;
-
-    setBusy("connect");
-    setError("");
-    setNotice("");
-    setActivity("Connecting repository...");
-
+  async function loadRepositories() {
     try {
-      const repo: Repo = await request("/repositories", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: repoUrl,
-          branch: "main",
-        }),
-      });
+      setLoadingRepos(true);
 
-      setRepos((prev) => [
-        repo,
-        ...prev.filter((r) => r.id !== repo.id),
-      ]);
+      const response = await fetch(`${API_BASE}/repositories`);
 
-      setSelectedId(repo.id);
-      setUrl("");
+      if (!response.ok) {
+        throw new Error("Unable to load repositories.");
+      }
 
-      setNotice(`Connected ${repo.name}`);
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Could not connect repository."
-      );
+      const data = await response.json();
+      const repos = Array.isArray(data) ? data : [];
+
+      setRepositories(repos);
+
+      if (repos.length > 0) {
+        setSelectedRepo(repos[0]);
+      }
+    } catch {
+      setRepositories([]);
     } finally {
-      setBusy(null);
-      setActivity("");
+      setLoadingRepos(false);
     }
   }
 
-  async function indexRepo() {
-    if (selectedId === null) return;
+  async function refreshRepository(repoId: number) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/repositories/${repoId}`
+      );
 
-    setBusy("index");
-    setError("");
-    setNotice("");
+      if (!response.ok) return;
+
+      const repo = await response.json();
+
+      setRepositories((current) =>
+        current.map((item) =>
+          item.id === repo.id ? repo : item
+        )
+      );
+
+      setSelectedRepo(repo);
+    } catch {
+      // Keep existing UI state.
+    }
+  }
+
+  async function indexRepository() {
+    if (!selectedRepo || indexing) return;
+
+    setIndexing(true);
+    setIndexMessage("");
 
     try {
-      setActivity("Checking repository...");
-
-      const data = await request(
-        `/repositories/${selectedId}/index`,
+      const response = await fetch(
+        `${API_BASE}/repositories/${selectedRepo.id}/index`,
         {
           method: "POST",
         }
       );
 
-      setRepos((prev) =>
-        prev.map((repo) =>
-          repo.id === selectedId
-            ? {
-                ...repo,
-                status: "indexed",
-                last_indexed_commit:
-                  data.commit ??
-                  repo.last_indexed_commit,
-              }
-            : repo
-        )
-      );
+      const data = await response.json();
 
-      setNotice(
-        data.chunks !== undefined
-          ? `Repository indexed successfully. ${data.chunks} chunks processed.`
-          : "Repository indexed successfully."
-      );
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Indexing failed."
-      );
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Repository indexing failed."
+        );
+      }
+
+      await refreshRepository(selectedRepo.id);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Repository indexing failed.";
+
+      setIndexMessage(message);
     } finally {
-      setBusy(null);
-      setActivity("");
+      setIndexing(false);
     }
   }
 
-  async function ask(text = question) {
-    const message = text.trim();
+  async function askQuestion(value?: string) {
+    const prompt = (value ?? question).trim();
 
-    if (selectedId === null || !message) return;
+    if (!prompt || !selectedRepo || asking) return;
 
     setQuestion("");
-    setError("");
-    setNotice("");
-    setBusy("chat");
+    setAsking(true);
 
-    setMessages((prev) => [
-      ...prev,
+    setMessages((current) => [
+      ...current,
       {
         role: "user",
-        content: message,
+        content: prompt,
       },
     ]);
 
     try {
-      setActivity("Searching indexed code...");
-
-      const data = await request("/chat", {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          repository_id: selectedId,
-          message,
+          repository_id: selectedRepo.id,
+          message: prompt,
         }),
       });
 
-      const answerSources: Source[] = data.sources || [];
+      const data = await response.json();
 
-      setMessages((prev) => [
-        ...prev,
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Unable to answer the question."
+        );
+      }
+
+      const answer = formatAnswer(extractAnswer(data));
+
+      const sources = Array.isArray(data?.sources)
+        ? data.sources
+        : [];
+
+      setMessages((current) => [
+        ...current,
         {
           role: "assistant",
-          content:
-            data.answer || "No answer returned.",
-          sources: answerSources,
+          content: answer,
+          sources,
         },
       ]);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Something went wrong.";
 
-      setSources(answerSources);
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "RepoPilot request failed."
-      );
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content: message,
+        },
+      ]);
     } finally {
-      setBusy(null);
-      setActivity("");
+      setAsking(false);
     }
   }
 
-  const suggestions = [
-    "What does this project do?",
-    "Explain the backend architecture.",
-    "Where is repository indexing implemented?",
-    "Find potential bugs or weak points.",
-    "What vector database and embedding model does this project use?",
-    "Explain how semantic search works.",
-  ];
+
+  async function connectRepository() {
+  const url = repoUrl.trim();
+
+  if (!url || connectingRepo) return;
+
+  setConnectingRepo(true);
+  setRepoError("");
+
+  try {
+    const response = await fetch(`${API_BASE}/repositories`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        branch: repoBranch.trim() || "main",
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        typeof data?.detail === "string"
+          ? data.detail
+          : "Unable to connect repository."
+      );
+    }
+
+    setRepositories((current) => {
+      const exists = current.some((repo) => repo.id === data.id);
+      return exists
+        ? current.map((repo) => (repo.id === data.id ? data : repo))
+        : [data, ...current];
+    });
+
+    setSelectedRepo(data);
+    setRepoUrl("");
+    setRepoBranch("main");
+    setShowNewRepo(false);
+
+  } catch (error) {
+    setRepoError(
+      error instanceof Error
+        ? error.message
+        : "Unable to connect repository."
+    );
+  } finally {
+    setConnectingRepo(false);
+  }
+}
+
+  function handleKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>
+  ) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      askQuestion();
+    }
+  }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">
-            <Icon name="logo" />
-          </div>
+    <main className="min-h-screen bg-[#08090b] text-white">
 
-          <div>
-            <strong>RepoPilot</strong>
-            <span>AI Codebase Intelligence</span>
-          </div>
+
+      {showNewRepo && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+    <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#101114] p-6 shadow-2xl">
+
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-white">
+            Connect repository
+          </h2>
+
+          <p className="mt-1 text-xs text-white/40">
+            Add a GitHub repository to your workspace.
+          </p>
         </div>
 
-        <div className="top-status">
-          <span className="status-dot" />
-          Local AI
-          <span className="divider" />
-          <span>Ollama + pgvector</span>
-        </div>
-      </header>
+        <button
+          onClick={() => setShowNewRepo(false)}
+          className="rounded-lg px-2 py-1 text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          ×
+        </button>
+      </div>
 
-      <div className="workspace">
-        <aside className="sidebar">
-          <div className="side-heading">
-            <span>WORKSPACE</span>
+      <div className="space-y-4">
 
-            <button
-              className="icon-button"
-              onClick={loadRepos}
-              disabled={busy !== null}
-              title="Refresh repositories"
-            >
-              ↻
-            </button>
-          </div>
-
-          <label className="field-label">
-            GitHub repository
+        <div>
+          <label className="mb-2 block text-[11px] font-medium text-white/50">
+            Repository URL
           </label>
 
-          <div className="connect-box">
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  connect();
-                }
-              }}
-              placeholder="https://github.com/user/repo"
-            />
-
-            <button
-              className="primary-button"
-              onClick={connect}
-              disabled={
-                busy !== null || !url.trim()
+          <input
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                connectRepository();
               }
-            >
-              {busy === "connect" ? (
-                <span className="spinner" />
-              ) : (
-                <Icon name="external" />
-              )}
-              Connect
-            </button>
-          </div>
+            }}
+            placeholder="https://github.com/username/repository"
+            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/[0.18]"
+            autoFocus
+          />
+        </div>
 
-          <div className="repo-list">
-            <div className="list-title">
-              Repositories
+        <div>
+          <label className="mb-2 block text-[11px] font-medium text-white/50">
+            Branch
+          </label>
+
+          <input
+            value={repoBranch}
+            onChange={(e) => setRepoBranch(e.target.value)}
+            placeholder="main"
+            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/[0.18]"
+          />
+        </div>
+
+        {repoError && (
+          <div className="rounded-xl border border-red-400/10 bg-red-400/[0.06] px-3 py-2.5 text-xs text-red-300">
+            {repoError}
+          </div>
+        )}
+
+        <button
+          onClick={connectRepository}
+          disabled={!repoUrl.trim() || connectingRepo}
+          className="w-full rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {connectingRepo ? "Connecting..." : "Connect repository"}
+        </button>
+
+      </div>
+    </div>
+  </div>
+)}
+      <div className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside className="hidden w-[260px] shrink-0 border-r border-white/[0.07] bg-[#0b0c0f] px-5 py-6 lg:block">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-sm font-bold text-black">
+              RP
             </div>
 
-            {repos.length === 0 ? (
-              <div className="empty-repos">
-                <Icon name="repo" />
-                <p>No repositories yet</p>
-                <span>
-                  Connect a public GitHub repository
-                  to begin.
-                </span>
+            <div>
+              <div className="text-[15px] font-semibold tracking-tight">
+                RepoPilot
+              </div>
+              <div className="text-[11px] text-white/40">
+                AI Code Intelligence
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Workspace
+              </span>
+
+              <button
+                onClick={loadRepositories}
+                className="rounded-md p-1.5 text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+                aria-label="Refresh repositories"
+              >
+                ↻
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+              <div className="mb-1 text-[11px] text-white/40">
+                GitHub repository
+              </div>
+
+              <div className="truncate text-sm text-white/85">
+                {selectedRepo?.name || "No repository"}
+              </div>
+
+              <div className="mt-1 text-[11px] text-white/30">
+                {selectedRepo?.branch || "main"}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-7">
+            <div className="mb-3 flex items-center justify-between">
+  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+    Repositories
+  </div>
+
+  <button
+    onClick={() => {
+      setRepoError("");
+      setShowNewRepo(true);
+    }}
+    className="flex h-6 w-6 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.025] text-sm text-white/45 transition hover:border-white/[0.15] hover:bg-white/[0.07] hover:text-white"
+    title="Connect repository"
+  >
+    +
+  </button>
+</div> 
+
+            {loadingRepos ? (
+              <div className="rounded-lg px-3 py-2 text-xs text-white/30">
+                Loading workspace
+              </div>
+            ) : repositories.length === 0 ? (
+              <div className="rounded-lg px-3 py-2 text-xs text-white/30">
+                No repositories connected
               </div>
             ) : (
-              repos.map((repo) => (
-                <button
-                  key={repo.id}
-                  className={`repo-item ${
-                    selectedId === repo.id
-                      ? "active"
-                      : ""
-                  }`}
-                  onClick={() => {
-                    setSelectedId(repo.id);
-                    setMessages([]);
-                    setSources([]);
-                    setError("");
-                    setNotice("");
-                  }}
-                >
-                  <div className="repo-icon">
-                    <Icon name="repo" />
-                  </div>
-
-                  <div className="repo-copy">
-                    <b>{repo.name}</b>
-                    <span>{repo.branch}</span>
-                  </div>
-
-                  <span
-                    className={`repo-state ${repo.status}`}
+              <div className="space-y-1">
+                {repositories.map((repo) => (
+                  <button
+                    key={repo.id}
+                    onClick={() => setSelectedRepo(repo)}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                      selectedRepo?.id === repo.id
+                        ? "bg-white/[0.07] text-white"
+                        : "text-white/50 hover:bg-white/[0.04] hover:text-white/80"
+                    }`}
                   >
-                    {repo.status}
-                  </span>
-                </button>
-              ))
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/30" />
+
+                    <span className="min-w-0 flex-1 truncate">
+                      {repo.name}
+                    </span>
+
+                    {repo.status === "indexed" && (
+                      <span className="text-[10px] text-white/30">
+                        indexed
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
-          <div className="sidebar-footer">
-            <div className="stack-card">
-              <div className="stack-icon">
-                <Icon name="spark" />
+          <div className="absolute bottom-6 left-5 right-5 lg:w-[220px]">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+              <div className="flex items-center gap-2 text-[11px] text-white/45">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
+                Private by design
               </div>
 
-              <div>
-                <b>Private by design</b>
-                <span>
-                  Models run locally through Ollama.
-                </span>
+              <div className="mt-1 text-[10px] text-white/25">
+                Models run locally through Ollama.
               </div>
             </div>
           </div>
         </aside>
 
-        <section className="main-panel">
-          <div className="repo-header">
-            <div>
-              <div className="eyebrow">
-                CODEBASE INTELLIGENCE
+        {/* Main */}
+        <section className="flex min-w-0 flex-1 flex-col">
+          {/* Top bar */}
+          <header className="flex h-16 items-center justify-between border-b border-white/[0.07] px-5 lg:px-8">
+            <div className="flex items-center gap-3 lg:hidden">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-xs font-bold text-black">
+                RP
               </div>
 
-              <h1>
-                {selected?.name ||
-                  "Connect a repository"}
-              </h1>
-
-              <p>
-                {selected?.url ||
-                  "Add a GitHub repository to start exploring its code with AI."}
-              </p>
+              <div className="text-sm font-semibold">
+                RepoPilot
+              </div>
             </div>
 
-            {selected && (
-              <div className="repo-actions">
-                <span
-                  className={`pill ${selected.status}`}
-                >
-                  <span className="mini-dot" />
-                  {selected.status}
-                </span>
+            <div className="hidden lg:block" />
 
-                <button
-                  className="secondary-button"
-                  onClick={indexRepo}
-                  disabled={busy !== null}
-                >
-                  {busy === "index" ? (
-                    <span className="spinner dark" />
-                  ) : (
-                    <Icon name="index" />
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  statusLabel === "Error"
+                    ? "bg-red-400"
+                    : statusLabel === "Indexing"
+                    ? "bg-amber-400"
+                    : "bg-emerald-400"
+                }`}
+              />
+
+              <span className="text-[11px] text-white/40">
+                {statusLabel}
+              </span>
+            </div>
+          </header>
+
+          {/* Workspace content */}
+          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 py-8 lg:px-8">
+            {/* Repository card */}
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-5">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">
+                    Codebase intelligence
+                  </div>
+
+                  <h1 className="truncate text-xl font-semibold tracking-tight">
+                    {selectedRepo?.name || "No repository selected"}
+                  </h1>
+
+                  {selectedRepo?.url && (
+                    <a
+                      href={selectedRepo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block truncate text-xs text-white/35 transition hover:text-white/60"
+                    >
+                      {selectedRepo.url} ↗
+                    </a>
                   )}
+                </div>
 
-                  {busy === "index"
-                    ? "Indexing..."
-                    : "Index repository"}
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        indexed
+                          ? "bg-emerald-400"
+                          : indexing
+                          ? "bg-amber-400"
+                          : "bg-white/25"
+                      }`}
+                    />
+
+                    <span className="text-xs text-white/50">
+                      {indexing
+                        ? "Indexing"
+                        : indexed
+                        ? "Indexed"
+                        : "Not indexed"}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={indexRepository}
+                    disabled={!selectedRepo || indexing}
+                    className="rounded-lg bg-white px-4 py-2 text-xs font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {indexing ? "Indexing…" : "Index repository"}
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
 
-          {(error || notice) && (
-            <div
-              className={`alert ${
-                error ? "error" : "success"
-              }`}
-            >
-              <span>{error || notice}</span>
+              {indexing && (
+                <div className="mt-4 flex items-center gap-2 border-t border-white/[0.05] pt-3 text-[11px] text-white/35">
+                  <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-white/20 border-t-white/70" />
+                  <span>Updating repository intelligence</span>
+                </div>
+              )}
 
-              <button
-                onClick={() => {
-                  setError("");
-                  setNotice("");
-                }}
-              >
-                ×
-              </button>
+              {indexMessage && (
+                <div className="mt-3 rounded-lg border border-red-400/10 bg-red-400/[0.04] px-3 py-2 text-xs text-red-300/80">
+                  {indexMessage}
+                </div>
+              )}
             </div>
-          )}
 
-          {activity && (
-            <div className="activity-bar">
-              <span className="activity-spinner" />
-              <span>{activity}</span>
-            </div>
-          )}
-
-          <div className="chat-area">
-            {messages.length === 0 ? (
-              <div className="welcome">
-                <div className="welcome-icon">
-                  <Icon name="spark" />
+            {/* Chat */}
+            <div className="mt-8 flex flex-1 flex-col">
+              <div className="mb-7">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">
+                  RepoPilot intelligence
                 </div>
 
-                <div className="eyebrow">
-                  REPOPILOT INTELLIGENCE
-                </div>
-
-                <h2>
+                <h2 className="text-2xl font-semibold tracking-tight">
                   Understand your codebase.
                   <br />
-                  <span>
+                  <span className="text-white/35">
                     Ship with confidence.
                   </span>
                 </h2>
 
-                <p>
-                  Ask questions about architecture,
-                  implementation details, bugs, or
-                  specific files. Answers are grounded
-                  in indexed repository code.
+                <p className="mt-3 max-w-xl text-sm leading-6 text-white/40">
+                  Ask questions about architecture, implementation
+                  details, bugs, or specific files. Answers are
+                  grounded in indexed repository code.
                 </p>
+              </div>
 
-                <div className="suggestions">
-                  {suggestions.map((suggestion) => (
+              {messages.length === 0 && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {QUICK_PROMPTS.map((prompt) => (
                     <button
-                      key={suggestion}
-                      onClick={() => ask(suggestion)}
-                      disabled={
-                        selectedId === null ||
-                        busy !== null
-                      }
+                      key={prompt}
+                      onClick={() => askQuestion(prompt)}
+                      disabled={!selectedRepo || asking}
+                      className="group rounded-xl border border-white/[0.06] bg-white/[0.018] px-4 py-3 text-left text-xs text-white/45 transition hover:border-white/[0.11] hover:bg-white/[0.035] hover:text-white/75 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <span>{suggestion}</span>
-                      <span>→</span>
+                      <span>{prompt}</span>
+                      <span className="ml-2 text-white/20 transition group-hover:text-white/50">
+                        →
+                      </span>
                     </button>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="conversation">
+              )}
+
+              <div className="mt-7 space-y-6">
                 {messages.map((message, index) => (
                   <div
-                    key={index}
-                    className={`message ${message.role}`}
+                    key={`${message.role}-${index}`}
+                    className="flex gap-3"
                   >
-                    <div className="avatar">
-                      {message.role === "assistant" ? (
-                        <Icon name="spark" />
-                      ) : (
-                        "A"
-                      )}
+                    <div
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-semibold ${
+                        message.role === "user"
+                          ? "bg-white/[0.08] text-white/70"
+                          : "bg-white text-black"
+                      }`}
+                    >
+                      {message.role === "user" ? "A" : "RP"}
                     </div>
 
-                    <div className="message-body">
-                      <div className="message-name">
-                        {message.role === "assistant"
-                          ? "RepoPilot"
-                          : "You"}
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 text-[11px] font-medium text-white/35">
+                        {message.role === "user"
+                          ? "You"
+                          : "RepoPilot"}
                       </div>
 
-                      <div className="message-content">
+                      <div className="whitespace-pre-wrap text-sm leading-7 text-white/75">
                         {message.content}
                       </div>
 
                       {message.sources &&
                         message.sources.length > 0 && (
-                          <div className="source-chips">
-                            {message.sources
-                              .slice(0, 5)
-                              .map((source, index) => (
-                                <button
-                                  key={`${source.file_path}-${index}`}
-                                  onClick={() =>
-                                    setActiveSource(
-                                      source
-                                    )
-                                  }
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {message.sources.slice(0, 5).map(
+                              (source, sourceIndex) => (
+                                <div
+                                  key={`${source.file_path}-${sourceIndex}`}
+                                  className="rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[10px] text-white/35"
                                 >
-                                  <Icon name="file" />
-                                  {source.file_path}:
-                                  {source.start_line}
-                                </button>
-                              ))}
+                                  {source.file_path}
+                                  {typeof source.start_line ===
+                                    "number" &&
+                                    `:${source.start_line}`}
+                                </div>
+                              )
+                            )}
                           </div>
                         )}
                     </div>
                   </div>
                 ))}
 
-                {busy === "chat" && (
-                  <div className="message assistant">
-                    <div className="avatar">
-                      <Icon name="spark" />
+                {asking && (
+                  <div className="flex gap-3">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[10px] font-semibold text-black">
+                      RP
                     </div>
 
-                    <div className="message-body">
-                      <div className="message-name">
+                    <div>
+                      <div className="mb-2 text-[11px] font-medium text-white/35">
                         RepoPilot
                       </div>
 
-                      <div className="typing">
-                        <i />
-                        <i />
-                        <i />
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/30" />
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/20 [animation-delay:150ms]" />
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/10 [animation-delay:300ms]" />
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          <div className="composer-wrap">
-            <div className="composer">
-              <textarea
-                value={question}
-                onChange={(e) =>
-                  setQuestion(e.target.value)
-                }
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey
-                  ) {
-                    e.preventDefault();
-                    ask();
-                  }
-                }}
-                placeholder={
-                  selectedId !== null
-                    ? "Ask anything about this codebase..."
-                    : "Connect a repository first..."
-                }
-                disabled={
-                  selectedId === null ||
-                  busy !== null
-                }
-                rows={1}
-              />
+              {/* Composer */}
+              <div className="mt-auto pt-10">
+                <div className="rounded-2xl border border-white/[0.08] bg-[#0d0f12] p-2 shadow-2xl shadow-black/20">
+                  <textarea
+                    value={question}
+                    onChange={(event) =>
+                      setQuestion(event.target.value)
+                    }
+                    onKeyDown={handleKeyDown}
+                    disabled={!selectedRepo || asking}
+                    placeholder={
+                      selectedRepo
+                        ? "Ask anything about your codebase…"
+                        : "Connect a repository to begin…"
+                    }
+                    rows={2}
+                    className="w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/20 disabled:cursor-not-allowed"
+                  />
 
-              <button
-                className="send-button"
-                onClick={() => ask()}
-                disabled={
-                  selectedId === null ||
-                  !question.trim() ||
-                  busy !== null
-                }
-              >
-                {busy === "chat" ? (
-                  <span className="spinner" />
-                ) : (
-                  <Icon name="send" />
-                )}
-              </button>
-            </div>
+                  <div className="flex items-center justify-between px-2 pb-1">
+                    <span className="text-[10px] text-white/25">
+                      Enter to send · Shift + Enter for new line
+                    </span>
 
-            <div className="composer-hint">
-              <span>
-                Enter to send · Shift + Enter for
-                new line
-              </span>
+                    <button
+                      onClick={() => askQuestion()}
+                      disabled={
+                        !question.trim() ||
+                        !selectedRepo ||
+                        asking
+                      }
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-20"
+                      aria-label="Send question"
+                    >
+                      ↑
+                    </button>
+                  </div>
+                </div>
 
-              <span>
-                Grounded answers · Local inference
-              </span>
+                <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/20">
+                  <span>● Grounded answers</span>
+                  <span>·</span>
+                  <span>Local inference</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
-
-        <aside className="sources-panel">
-          <div className="sources-header">
-            <div>
-              <div className="eyebrow">CONTEXT</div>
-              <h3>Sources</h3>
-            </div>
-
-            <span className="count">
-              {sources.length}
-            </span>
-          </div>
-
-          {sources.length === 0 ? (
-            <div className="sources-empty">
-              <Icon name="file" />
-
-              <b>Relevant files appear here</b>
-
-              <span>
-                Ask RepoPilot a question to see the
-                code used to ground its answer.
-              </span>
-            </div>
-          ) : (
-            <div className="source-list">
-              {sources.map((source, index) => (
-                <button
-                  className="source-card"
-                  key={`${source.file_path}-${index}`}
-                  onClick={() =>
-                    setActiveSource(source)
-                  }
-                >
-                  <div className="source-top">
-                    <Icon name="file" />
-                    <span>{source.file_path}</span>
-                  </div>
-
-                  <span className="line-range">
-                    Lines {source.start_line}–
-                    {source.end_line}
-                  </span>
-
-                  <code>
-                    {source.content
-                      .slice(0, 150)
-                      .replace(/\n/g, " ")}
-                    {source.content.length > 150
-                      ? "…"
-                      : ""}
-                  </code>
-                </button>
-              ))}
-            </div>
-          )}
-        </aside>
       </div>
-
-      {activeSource && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setActiveSource(null)}
-        >
-          <div
-            className="source-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <div>
-                <div className="eyebrow">
-                  SOURCE
-                </div>
-
-                <h3>{activeSource.file_path}</h3>
-
-                <span>
-                  Lines {activeSource.start_line}–
-                  {activeSource.end_line}
-                </span>
-              </div>
-
-              <button
-                className="close-button"
-                onClick={() =>
-                  setActiveSource(null)
-                }
-              >
-                ×
-              </button>
-            </div>
-
-            <pre>
-              <code>{activeSource.content}</code>
-            </pre>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
