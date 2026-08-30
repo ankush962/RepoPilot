@@ -51,3 +51,4 @@ The default setup uses local Ollama inference and local PostgreSQL/pgvector. No 
 ## Production roadmap
 
 Authentication, GitHub OAuth/App, background indexing jobs, AST-aware chunking, hybrid retrieval, reranking, tool calling, sandboxed test execution, evaluation, streaming, observability and deployment.
+// Git sync test
