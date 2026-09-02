@@ -1,0 +1,288 @@
+@import "tailwindcss";
+
+:root {
+color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  }
+
+html,
+body {
+margin: 0;
+min-height: 100%;
+background: #08090b;
+}
+
+body {
+font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+color: #f5f7fb;
+-webkit-font-smoothing: antialiased;
+text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea {
+font: inherit;
+}
+
+button {
+cursor: pointer;
+}
+
+button:disabled {
+cursor: not-allowed;
+}
+
+a {
+color: inherit;
+text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+margin: 0;
+}
+
+textarea {
+resize: none;
+}
+
+::selection {
+background: rgba(255, 255, 255, 0.16);
+}
+
+:focus-visible {
+outline: 2px solid rgba(255, 255, 255, 0.45);
+outline-offset: 2px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  }
+
+*::-webkit-scrollbar {
+width: 7px;
+height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+background: rgba(255, 255, 255, 0.11);
+border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+background: rgba(255, 255, 255, 0.18);
+}
+
+.markdown-content > *:first-child {
+margin-top: 0;
+}
+
+.markdown-content p:last-child,
+.markdown-content ul:last-child,
+.markdown-content ol:last-child,
+.markdown-content pre:last-child {
+margin-bottom: 0;
+}
+
+.markdown-content pre {
+white-space: pre-wrap;
+word-break: break-word;
+}
+
+.markdown-content code {
+font-family:
+"SFMono-Regular",
+"SF Mono",
+Consolas,
+"Liberation Mono",
+Menlo,
+monospace;
+}
+
+@keyframes fadeUp {
+from {
+opacity: 0;
+transform: translateY(6px);
+}
+
+to {
+opacity: 1;
+transform: translateY(0);
+}
+}
+
+.animate-fade-up {
+animation: fadeUp 220ms ease-out both;
+}
+
+@keyframes shimmer {
+0% {
+transform: translateX(-100%);
+}
+
+100% {
+transform: translateX(100%);
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+*,
+*::before,
+*::after {
+scroll-behavior: auto !important;
+animation-duration: 1ms !important;
+animation-iteration-count: 1 !important;
+transition-duration: 1ms !important;
+}
+}
+
+/* Chat inputs */
+
+textarea,
+input {
+background: transparent !important;
+color: #f5f7fb !important;
+border: 0 !important;
+outline: none !important;
+box-shadow: none !important;
+-webkit-appearance: none;
+appearance: none;
+}
+
+textarea::placeholder,
+input::placeholder {
+color: rgba(255, 255, 255, 0.38);
+}
+
+textarea:focus,
+input:focus {
+background: transparent !important;
+border-color: transparent !important;
+outline: none !important;
+box-shadow: none !important;
+}
+
+/* Autofill */
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+-webkit-text-fill-color: #f5f7fb !important;
+-webkit-box-shadow: 0 0 0 1000px #08090b inset !important;
+box-shadow: 0 0 0 1000px #08090b inset !important;
+transition: background-color 9999s ease-out 0s;
+}
+
+/* Composer */
+
+.composer textarea,
+.chat-input textarea {
+background: transparent !important;
+border: none !important;
+box-shadow: none !important;
+outline: none !important;
+}
+
+/* Markdown links */
+
+.markdown-content a {
+color: rgba(255, 255, 255, 0.8);
+text-decoration: underline;
+text-decoration-color: rgba(255, 255, 255, 0.2);
+text-underline-offset: 3px;
+}
+
+.markdown-content a:hover {
+color: #fff;
+text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Markdown blockquotes */
+
+.markdown-content blockquote {
+margin: 1rem 0;
+border-left: 2px solid rgba(255, 255, 255, 0.12);
+padding-left: 1rem;
+color: rgba(255, 255, 255, 0.45);
+}
+
+/* Markdown tables */
+
+.markdown-content table {
+width: 100%;
+margin: 1rem 0;
+border-collapse: collapse;
+overflow: hidden;
+border: 1px solid rgba(255, 255, 255, 0.07);
+border-radius: 0.75rem;
+}
+
+.markdown-content th,
+.markdown-content td {
+border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+padding: 0.55rem 0.7rem;
+text-align: left;
+font-size: 0.75rem;
+}
+
+.markdown-content th {
+background: rgba(255, 255, 255, 0.035);
+color: rgba(255, 255, 255, 0.65);
+font-weight: 600;
+}
+
+.markdown-content td {
+color: rgba(255, 255, 255, 0.5);
+}
+
+.markdown-content tr:last-child td {
+border-bottom: 0;
+}
+
+/* Markdown horizontal rules */
+
+.markdown-content hr {
+margin: 1.25rem 0;
+border: 0;
+border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Code blocks */
+
+.markdown-content pre {
+overflow-x: auto;
+}
+
+.markdown-content pre code {
+white-space: pre;
+word-break: normal;
+}
+
+/* Better mobile behavior */
+
+@media (max-width: 640px) {
+.markdown-content pre {
+font-size: 11px;
+line-height: 1.6;
+}
+
+.markdown-content table {
+display: block;
+overflow-x: auto;
+}
+}

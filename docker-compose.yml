@@ -1,0 +1,265 @@
+services:
+
+  # ---------------------------------------------------------------
+  # DATABASE
+  # ---------------------------------------------------------------
+
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: repopilot-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_copilot}
+      POSTGRES_USER: ${POSTGRES_USER:-repopilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-repopilot} -d ${POSTGRES_DB:-ai_copilot}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+    networks:
+      - repopilot
+
+
+  # ---------------------------------------------------------------
+  # DATABASE MIGRATIONS
+  # ---------------------------------------------------------------
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: repopilot-migrate
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://repopilot:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_copilot}
+
+    command:
+      [
+        "alembic",
+        "upgrade",
+        "head"
+      ]
+
+    restart: "no"
+
+    networks:
+      - repopilot
+
+
+  # ---------------------------------------------------------------
+  # API
+  # ---------------------------------------------------------------
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: repopilot-api
+    restart: unless-stopped
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://repopilot:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_copilot}
+
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:?AUTH_PASSWORD is required}
+
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-720}
+
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-repopilot_session}
+      SESSION_EXPIRE_DAYS: ${SESSION_EXPIRE_DAYS:-7}
+
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
+      HEALTHCHECK_TIMEOUT_SECONDS: ${HEALTHCHECK_TIMEOUT_SECONDS:-10}
+
+      WORKSPACE_DIR: /app/workspace
+
+      WORKER_ENABLED: "false"
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-1}
+      MAX_INDEX_ATTEMPTS: ${MAX_INDEX_ATTEMPTS:-3}
+      STALE_JOB_MINUTES: ${STALE_JOB_MINUTES:-30}
+
+      MAX_CHAT_MESSAGE_CHARS: ${MAX_CHAT_MESSAGE_CHARS:-4000}
+      MAX_RETRIEVAL_LIMIT: ${MAX_RETRIEVAL_LIMIT:-12}
+
+      GIT_AUTO_SYNC_ENABLED: ${GIT_AUTO_SYNC_ENABLED:-true}
+      GIT_AUTO_SYNC_INTERVAL_SECONDS: ${GIT_AUTO_SYNC_INTERVAL_SECONDS:-60}
+      GIT_COMPARE_MAX_COMMITS: ${GIT_COMPARE_MAX_COMMITS:-100}
+
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-120}
+
+      MODEL_TEMPERATURE: ${MODEL_TEMPERATURE:-0}
+      MODEL_NUM_PREDICT: ${MODEL_NUM_PREDICT:-2000}
+      MODEL_NUM_CTX: ${MODEL_NUM_CTX:-8192}
+
+      AUTO_CREATE_TABLES: "false"
+      ENSURE_SCHEMA_ON_STARTUP: "false"
+
+    volumes:
+      - repo_workspace:/app/workspace
+
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--proxy-headers"
+      ]
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5)\""
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - repopilot
+
+
+  # ---------------------------------------------------------------
+  # WORKER
+  # ---------------------------------------------------------------
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: repopilot-worker
+    restart: unless-stopped
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://repopilot:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_copilot}
+
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
+
+      WORKSPACE_DIR: /app/workspace
+
+      WORKER_ENABLED: "false"
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-1}
+      MAX_INDEX_ATTEMPTS: ${MAX_INDEX_ATTEMPTS:-3}
+      STALE_JOB_MINUTES: ${STALE_JOB_MINUTES:-30}
+
+      GIT_AUTO_SYNC_ENABLED: ${GIT_AUTO_SYNC_ENABLED:-true}
+      GIT_AUTO_SYNC_INTERVAL_SECONDS: ${GIT_AUTO_SYNC_INTERVAL_SECONDS:-60}
+      GIT_COMPARE_MAX_COMMITS: ${GIT_COMPARE_MAX_COMMITS:-100}
+
+      AUTO_CREATE_TABLES: "false"
+      ENSURE_SCHEMA_ON_STARTUP: "false"
+
+    volumes:
+      - repo_workspace:/app/workspace
+
+    command:
+      [
+        "python",
+        "-m",
+        "app.services.worker"
+      ]
+
+    networks:
+      - repopilot
+
+
+  # ---------------------------------------------------------------
+  # FRONTEND
+  # ---------------------------------------------------------------
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+
+    container_name: repopilot-frontend
+    restart: unless-stopped
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+    networks:
+      - repopilot
+
+
+volumes:
+  postgres_data:
+    name: repopilot-postgres-data
+
+  repo_workspace:
+    name: repopilot-repository-workspace
+
+
+networks:
+  repopilot:
+    name: repopilot-network
+    driver: bridge

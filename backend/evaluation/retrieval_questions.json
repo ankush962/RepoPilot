@@ -1,0 +1,64 @@
+[
+  {
+    "question": "Where is repository indexing implemented?",
+    "expected_files": [
+      "backend/app/services/ingestion.py",
+      "backend/app/api/repositories.py"
+    ]
+  },
+  {
+    "question": "How does semantic search work?",
+    "expected_files": [
+      "backend/app/services/vector_store.py"
+    ]
+  },
+  {
+    "question": "Where are repository API endpoints defined?",
+    "expected_files": [
+      "backend/app/api/repositories.py"
+    ]
+  },
+  {
+    "question": "Where is the AI agent implemented?",
+    "expected_files": [
+      "backend/app/services/agent.py"
+    ]
+  },
+  {
+    "question": "Where are embeddings generated?",
+    "expected_files": [
+      "backend/app/services/vector_store.py"
+    ]
+  },
+  {
+    "question": "What database does the project use?",
+    "expected_files": [
+      "README.md",
+      "backend/app/database.py"
+    ]
+  },
+  {
+    "question": "How are repositories cloned and updated?",
+    "expected_files": [
+      "backend/app/services/ingestion.py"
+    ]
+  },
+  {
+    "question": "Where is hybrid ranking implemented?",
+    "expected_files": [
+      "backend/app/services/vector_store.py"
+    ]
+  },
+  {
+    "question": "Where is the FastAPI application created?",
+    "expected_files": [
+      "backend/app/main.py"
+    ]
+  },
+  {
+    "question": "Where is repository status handled?",
+    "expected_files": [
+      "backend/app/api/repositories.py"
+    ]
+  }
+]
