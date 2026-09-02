@@ -1,3 +1,4 @@
+
 name: RepoPilot CI
 
 on:
@@ -18,6 +19,21 @@ jobs:
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: repopilot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d repopilot_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     defaults:
       run:
@@ -44,10 +60,17 @@ jobs:
         run: |
           python -m compileall -q app
 
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/repopilot_test
+        run: |
+          alembic upgrade head
+
       - name: Run tests
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/repopilot_test
         run: |
           pytest -q tests
-
 
   frontend-build:
     name: Frontend build
@@ -75,7 +98,6 @@ jobs:
       - name: Build frontend
         run: |
           npm run build
-
 
   docker-build:
     name: Docker build
@@ -105,7 +127,6 @@ jobs:
             -f frontend/Dockerfile \
             -t repopilot-frontend:ci \
             frontend
-
 
   migration-validation:
     name: Migration validation
