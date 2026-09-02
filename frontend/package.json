@@ -2,7 +2,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -14,6 +15,7 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "26.2.0",
     "@types/react": "19.2.18",
     "typescript": "7.0.2"
