@@ -108,22 +108,22 @@ RepoPilot includes application-level controls for multi-user workspaces.
       └─────────┬─────────┘
                 ▲
                 │
-      ┌─────────┴─────────┐
-      │ Background Worker │
+      ┌─────────┴─────────-┐
+      │ Background Worker  │
       │ indexing / retries │
-      └─────────┬─────────┘
+      └─────────┬─────────-┘
                 │
                 ▼
-      ┌────────────────────┐
-      │ Repository ingestion│
+      ┌────────────────────--┐
+      │ Repository ingestion │
       │       GitPython      │
-      └─────────┬──────────┘
+      └─────────┬──────────--┘
                 │
                 ▼
       ┌────────────────────┐
-      │      Ollama         │
-      │ Qwen 2.5 Coder 7B   │
-      │ nomic-embed-text     │
+      │      Ollama        │
+      │ Qwen 2.5 Coder 7B  │
+      │ nomic-embed-text   │
       └────────────────────┘
 ```
 
