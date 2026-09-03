@@ -1,0 +1,154 @@
+services:
+
+  # -------------------------------------------------------
+  # OLLAMA
+  # -------------------------------------------------------
+  - type: pserv
+    name: repopilot-ollama
+    runtime: image
+    plan: 1c-2g
+    image:
+      url: ollama/ollama:latest
+
+    dockerCommand: >
+      sh -c "ollama serve"
+
+    disk:
+      name: ollama-data
+      mountPath: /root/.ollama
+      sizeGB: 20
+
+  # -------------------------------------------------------
+  # API
+  # -------------------------------------------------------
+  - type: web
+    name: repopilot-api
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+
+    preDeployCommand: alembic upgrade head
+
+    dockerCommand: >
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: repopilot-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: repopilot-redis
+          type: keyvalue
+          property: connectionString
+
+      - key: OLLAMA_URL
+        fromService:
+          name: repopilot-ollama
+          type: pserv
+          property: hostport
+
+      - key: ENVIRONMENT
+        value: production
+
+      - key: LOG_LEVEL
+        value: INFO
+
+      - key: FRONTEND_URL
+        sync: false
+
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      - key: GITHUB_TOKEN
+        sync: false
+
+      - key: SECRET_KEY
+        generateValue: true
+
+  # -------------------------------------------------------
+  # WORKER
+  # -------------------------------------------------------
+  - type: worker
+    name: repopilot-worker
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+
+    dockerCommand: >
+      python -m app.services.worker
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: repopilot-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          name: repopilot-redis
+          type: keyvalue
+          property: connectionString
+
+      - key: OLLAMA_URL
+        fromService:
+          name: repopilot-ollama
+          type: pserv
+          property: hostport
+
+      - key: ENVIRONMENT
+        value: production
+
+      - key: LOG_LEVEL
+        value: INFO
+
+      - key: GITHUB_TOKEN
+        sync: false
+
+      - key: SECRET_KEY
+        fromService:
+          name: repopilot-api
+          type: web
+          envVarKey: SECRET_KEY
+
+   # -------------------------------------------------------
+  # FRONTEND
+  # -------------------------------------------------------
+  - type: web
+    name: repopilot-frontend
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+
+    dockerCommand: >
+      sh -c "npm start -- --hostname 0.0.0.0 --port $PORT"
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: NEXT_PUBLIC_API_URL
+        value: /api
+
+  # -------------------------------------------------------
+  # REDIS / VALKEY
+  # -------------------------------------------------------
+  - type: keyvalue
+    name: repopilot-redis
+    plan: free
+
+databases:
+
+  # -------------------------------------------------------
+  # POSTGRES
+  # -------------------------------------------------------
+  - name: repopilot-db
+    plan: 0.5c-512mb
+    postgresMajorVersion: "17"
