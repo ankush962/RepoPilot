@@ -20,9 +20,19 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+  redis:
+    image: redis:7-alpine
+    options: >-
+      --health-cmd "redis-cli ping"
+      --health-interval 5s
+      --health-timeout 5s
+      --health-retries 10
+    ports:
+      - 6379:6379
       postgres:
         image: pgvector/pgvector:pg17
         env:
+      REDIS_URL: redis://localhost:6379/0
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: repopilot_test
