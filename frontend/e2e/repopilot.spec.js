@@ -133,19 +133,15 @@ test.beforeEach(async ({ page }) => {
               : String(input);
 
         const method =
-          init?.method ||
-          (input instanceof Request ? input.method : "GET");
+          init?.method || (input instanceof Request ? input.method : "GET");
 
         if (url.includes("/workspaces")) {
-          return new Response(
-            JSON.stringify([workspace]),
-            {
-              status: 200,
-              headers: {
-                "Content-Type": "application/json",
-              },
+          return new Response(JSON.stringify([workspace]), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
             },
-          );
+          });
         }
 
         if (
@@ -156,27 +152,21 @@ test.beforeEach(async ({ page }) => {
           !url.includes("/architecture") &&
           !url.includes("/git/")
         ) {
-          return new Response(
-            JSON.stringify([repository]),
-            {
-              status: 200,
-              headers: {
-                "Content-Type": "application/json",
-              },
+          return new Response(JSON.stringify([repository]), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
             },
-          );
+          });
         }
 
         if (url.includes(`/repositories/${repository.id}/dashboard`)) {
-          return new Response(
-            JSON.stringify(dashboard),
-            {
-              status: 200,
-              headers: {
-                "Content-Type": "application/json",
-              },
+          return new Response(JSON.stringify(dashboard), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
             },
-          );
+          });
         }
 
         if (url.includes(`/repositories/${repository.id}/files`)) {
@@ -193,17 +183,11 @@ test.beforeEach(async ({ page }) => {
           );
         }
 
-        if (
-          url.includes(
-            `/repositories/${repository.id}/git/status`,
-          )
-        ) {
+        if (url.includes(`/repositories/${repository.id}/git/status`)) {
           return new Response(
             JSON.stringify({
-              last_indexed_commit:
-                repository.last_indexed_commit,
-              remote_commit:
-                repository.last_indexed_commit,
+              last_indexed_commit: repository.last_indexed_commit,
+              remote_commit: repository.last_indexed_commit,
               needs_update: false,
             }),
             {
@@ -215,11 +199,7 @@ test.beforeEach(async ({ page }) => {
           );
         }
 
-        if (
-          url.includes(
-            `/repositories/${repository.id}/architecture`,
-          )
-        ) {
+        if (url.includes(`/repositories/${repository.id}/architecture`)) {
           return new Response(
             JSON.stringify({
               summary: "Demo architecture",
@@ -266,9 +246,7 @@ test.beforeEach(async ({ page }) => {
           const body = new ReadableStream({
             start(controller) {
               for (const chunk of chunks) {
-                controller.enqueue(
-                  encoder.encode(chunk),
-                );
+                controller.enqueue(encoder.encode(chunk));
               }
               controller.close();
             },
@@ -297,14 +275,10 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test("loads the RepoPilot workspace and repository", async ({
-  page,
-}) => {
+test("loads the RepoPilot workspace and repository", async ({ page }) => {
   await page.goto("/");
 
-  await expect(
-    page.getByText("Repositories", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("Repositories", { exact: true })).toBeVisible();
 
   await expect(
     page.getByRole("heading", {
@@ -328,6 +302,19 @@ test("opens dashboard and explorer", async ({ page }) => {
     }),
   ).toBeVisible();
 
+  await page
+    .getByRole("button", {
+      name: "Overview",
+      exact: true,
+    })
+    .click();
+
+  await expect(
+    page.getByText("Repository dashboard", {
+      exact: true,
+    }),
+  ).toBeVisible();
+
   await expect(
     page.getByText("Repository dashboard", {
       exact: true,
@@ -340,21 +327,17 @@ test("opens dashboard and explorer", async ({ page }) => {
     }),
   ).toBeVisible();
 
-  await expect(
-    page.getByText("12", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("12", { exact: true })).toBeVisible();
 
-  await expect(
-    page.getByText("48", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("48", { exact: true })).toBeVisible();
 
-  await expect(
-    page.getByText("Healthy", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("Healthy", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", {
-    name: "Explorer",
-  }).click();
+  await page
+    .getByRole("button", {
+      name: "Explorer",
+    })
+    .click();
 
   await expect(
     page.getByText("Codebase explorer", {
@@ -375,28 +358,19 @@ test("opens dashboard and explorer", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("submits a grounded codebase question", async ({
-  page,
-}) => {
+test("submits a grounded codebase question", async ({ page }) => {
   await page.goto("/");
 
-  const question = page.getByPlaceholder(
-    "Ask about your codebase…",
-  );
+  const question = page.getByPlaceholder("Ask about your codebase…");
 
   await expect(question).toBeVisible();
 
-  await question.fill(
-    "How is the application structured?",
-  );
+  await question.fill("How is the application structured?");
 
   await question.press("Enter");
 
   await expect(
-    page.getByText(
-      "How is the application structured?",
-      { exact: true },
-    ),
+    page.getByText("How is the application structured?", { exact: true }),
   ).toBeVisible();
 
   await expect(
