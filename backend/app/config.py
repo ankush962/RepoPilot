@@ -117,6 +117,8 @@ class Settings(BaseSettings):
 
     rate_limit_enabled: bool = True
 
+    redis_url: str = "redis://redis:6379/0"
+
     rate_limit_window_seconds: int = 60
 
     rate_limit_max_requests: int = 120

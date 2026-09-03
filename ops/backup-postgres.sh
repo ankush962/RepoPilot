@@ -1,17 +1,16 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-./backups}"
-TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
 
 mkdir -p "$BACKUP_DIR"
 
-docker compose exec -T db \
-  pg_dump \
-  -U "${POSTGRES_USER:-repopilot}" \
-  -d "${POSTGRES_DB:-ai_copilot}" \
-  -Fc \
-  > "${BACKUP_DIR}/ai_copilot_${TIMESTAMP}.dump"
+STAMP="$(date +"%Y%m%d_%H%M%S")"
+FILE="$BACKUP_DIR/repopilot_${STAMP}.dump"
 
-echo "Backup created:"
-echo "${BACKUP_DIR}/ai_copilot_${TIMESTAMP}.dump"
+docker exec -i repopilot-db   pg_dump     -U "${POSTGRES_USER:-repopilot}"     -d "${POSTGRES_DB:-ai_copilot}"     -Fc > "$FILE"
+
+gzip -f "$FILE"
+
+echo "Backup written: ${FILE}.gz"

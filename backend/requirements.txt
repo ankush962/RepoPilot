@@ -47,3 +47,5 @@ websockets==17.0.1
 PyJWT==2.10.1
 pgvector==0.4.2
 pytest==9.0.1
+prometheus-fastapi-instrumentator>=7,<9
+redis>=5,<8

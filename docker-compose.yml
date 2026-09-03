@@ -49,6 +49,7 @@ services:
 
     environment:
       DATABASE_URL: postgresql+psycopg://repopilot:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_copilot}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
 
     command:
       [
@@ -58,6 +59,39 @@ services:
       ]
 
     restart: "no"
+
+    networks:
+      - repopilot
+
+
+
+  # ---------------------------------------------------------------
+  # REDIS
+  # ---------------------------------------------------------------
+
+  redis:
+    image: redis:7-alpine
+    container_name: repopilot-redis
+    restart: unless-stopped
+
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--save",
+        "60",
+        "1000"
+      ]
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
     networks:
       - repopilot
@@ -78,9 +112,12 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
     environment:
       DATABASE_URL: postgresql+psycopg://repopilot:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_copilot}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
 
       ENVIRONMENT: ${ENVIRONMENT:-production}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -135,8 +172,6 @@ services:
     volumes:
       - repo_workspace:/app/workspace
 
-    ports:
-      - "${API_PORT:-8000}:8000"
 
     command:
       [
@@ -179,6 +214,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
     environment:
       DATABASE_URL: postgresql+psycopg://repopilot:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_copilot}
@@ -231,7 +268,7 @@ services:
       dockerfile: Dockerfile
 
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
 
     container_name: repopilot-frontend
     restart: unless-stopped
@@ -242,10 +279,90 @@ services:
 
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+
+
+    networks:
+      - repopilot
+
+
+
+  # ---------------------------------------------------------------
+  # REVERSE PROXY / HTTPS
+  # ---------------------------------------------------------------
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: repopilot-caddy
+    restart: unless-stopped
+
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
 
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "18080:8080"
+      - "18443:8443"
+
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+    networks:
+      - repopilot
+
+
+
+  # ---------------------------------------------------------------
+  # MONITORING
+  # ---------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: repopilot-prometheus
+    restart: unless-stopped
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    ports:
+      - "19090:9090"
+
+    networks:
+      - repopilot
+
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: repopilot-grafana
+    restart: unless-stopped
+
+    depends_on:
+      - prometheus
+
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+
+    ports:
+      - "13000:3000"
 
     networks:
       - repopilot
@@ -257,6 +374,21 @@ volumes:
 
   repo_workspace:
     name: repopilot-repository-workspace
+
+  caddy_data:
+    name: repopilot-caddy-data
+
+  redis_data:
+    name: repopilot-redis-data
+
+  prometheus_data:
+    name: repopilot-prometheus-data
+
+  grafana_data:
+    name: repopilot-grafana-data
+
+  caddy_config:
+    name: repopilot-caddy-config
 
 
 networks:

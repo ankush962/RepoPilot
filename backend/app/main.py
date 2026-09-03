@@ -22,6 +22,8 @@ from app.models import CodeChunk, IndexJob
 from app.services.schema import ensure_schema
 
 
+from prometheus_fastapi_instrumentator import Instrumentator
+from redis import asyncio as redis_asyncio
 # ------------------------------------------------------------------
 # LOGGING
 # ------------------------------------------------------------------
@@ -55,6 +57,11 @@ app = FastAPI(
         "intelligence platform."
     ),
 )
+
+Instrumentator().instrument(app).expose(
+    app, 
+    endpoint="/metrics",
+    )
 
 
 # ------------------------------------------------------------------
@@ -98,27 +105,38 @@ app.include_router(chat_router)
 # REQUEST RATE LIMITING
 # ------------------------------------------------------------------
 
-RATE_LIMIT_WINDOW_SECONDS = (
-    settings.rate_limit_window_seconds
+RATE_LIMIT_WINDOW_SECONDS = settings.rate_limit_window_seconds
+RATE_LIMIT_MAX_REQUESTS = settings.rate_limit_max_requests
+
+
+_redis_rate_limiter = redis_asyncio.from_url(
+    settings.redis_url,
+    encoding="utf-8",
+    decode_responses=True,
+    socket_connect_timeout=2,
+    socket_timeout=2,
 )
 
-RATE_LIMIT_MAX_REQUESTS = (
-    settings.rate_limit_max_requests
-)
 
-_rate_limit_buckets: dict[
-    str,
-    deque[float],
-] = defaultdict(deque)
+_RATE_LIMIT_LUA = """
+local current = redis.call("INCR", KEYS[1])
+
+if current == 1 then
+    redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+
+return current
+"""
 
 
 def _client_key(request: Request) -> str:
     """
-    Identify the caller for the in-process rate limiter.
+    Identify the caller for rate limiting.
 
-    When running behind a trusted reverse proxy, use the direct
-    client address rather than blindly trusting arbitrary
-    X-Forwarded-For headers.
+    The API uses the direct peer address seen by FastAPI.
+    Behind Caddy this is the proxy hop, so the limiter remains
+    intentionally conservative and does not trust arbitrary
+    X-Forwarded-For input.
     """
     client = request.client
 
@@ -134,16 +152,18 @@ async def rate_limit_middleware(
     call_next,
 ):
     """
-    Basic in-process request rate limiter.
+    Redis-backed fixed-window rate limiter.
 
-    This is intentionally simple and dependency-free.
-    For multiple replicas/workers, use Redis-backed limiting.
+    Redis INCR + EXPIRE are performed atomically through Lua,
+    so multiple API instances/processes share the same limit.
+    Redis failures fail open so the API remains available.
     """
-    # Do not rate-limit CORS preflight requests.
+
+    # Never rate-limit CORS preflight requests.
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    # Keep health probes available even under application load.
+    # Keep health probes available.
     if request.url.path.startswith("/health"):
         return await call_next(request)
 
@@ -151,42 +171,49 @@ async def rate_limit_middleware(
         return await call_next(request)
 
     client_key = _client_key(request)
-    now = time.monotonic()
 
-    bucket = _rate_limit_buckets[client_key]
+    # One Redis key per client per fixed time window.
+    window = int(
+        time.time() // RATE_LIMIT_WINDOW_SECONDS
+    )
 
-    while (
-        bucket
-        and (
-            now - bucket[0]
-            > RATE_LIMIT_WINDOW_SECONDS
-        )
-    ):
-        bucket.popleft()
+    redis_key = (
+        f"repopilot:rate:"
+        f"{client_key}:"
+        f"{window}"
+    )
 
-    if len(bucket) >= RATE_LIMIT_MAX_REQUESTS:
-        retry_after = max(
+    try:
+        count = await _redis_rate_limiter.eval(
+            _RATE_LIMIT_LUA,
             1,
-            int(
-                RATE_LIMIT_WINDOW_SECONDS
-                - (now - bucket[0])
-            ),
+            redis_key,
+            str(RATE_LIMIT_WINDOW_SECONDS),
         )
 
-        return JSONResponse(
-            status_code=429,
-            content={
-                "detail": (
-                    "Too many requests. "
-                    "Please try again later."
-                )
-            },
-            headers={
-                "Retry-After": str(retry_after),
-            },
-        )
+        if int(count) > RATE_LIMIT_MAX_REQUESTS:
+            ttl = await _redis_rate_limiter.ttl(redis_key)
 
-    bucket.append(now)
+            retry_after = max(
+                1,
+                int(ttl),
+            )
+
+            return JSONResponse(
+                status_code=429,
+                headers={
+                    "Retry-After": str(retry_after),
+                },
+                content={
+                    "detail": "Rate limit exceeded.",
+                    "retry_after": retry_after,
+                },
+            )
+
+    except Exception:
+        # Redis outage should not take the API offline.
+        # Fail open and allow the request through.
+        pass
 
     return await call_next(request)
 

@@ -1,0 +1,13 @@
+http://localhost:8080 {
+    redir https://localhost:18443{uri} permanent
+}
+
+https://localhost:8443 {
+    tls internal
+
+    handle_path /api/* {
+        reverse_proxy api:8000
+    }
+
+    reverse_proxy frontend:3000
+}
