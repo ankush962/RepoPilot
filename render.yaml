@@ -143,6 +143,7 @@ services:
   - type: keyvalue
     name: repopilot-redis
     plan: free
+    ipAllowList: []
 
 databases:
 
@@ -150,5 +151,5 @@ databases:
   # POSTGRES
   # -------------------------------------------------------
   - name: repopilot-db
-    plan: 0.5c-512mb
+    plan: 0.5c-1g
     postgresMajorVersion: "17"
