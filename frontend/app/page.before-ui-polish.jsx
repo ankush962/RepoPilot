@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const API_BASE = "/api";
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
+).replace(/\/$/, "");
 
 const QUICK_PROMPTS = [
   ["Project overview", "What does this project do?", "✦"],
@@ -217,7 +219,9 @@ function MessageMetrics({ metrics }) {
   if (!parts.length) return null;
 
   return (
-    <div className="mt-3 text-[9px] text-white/20">{parts.join("  ·  ")}</div>
+    <div className="mt-3 text-[9px] text-white/20">
+      {parts.join("  ·  ")}
+    </div>
   );
 }
 
@@ -247,7 +251,10 @@ function saveConversationHistory(repoId, messages) {
   if (!repoId || typeof window === "undefined") return;
 
   try {
-    window.localStorage.setItem(historyKey(repoId), JSON.stringify(messages));
+    window.localStorage.setItem(
+      historyKey(repoId),
+      JSON.stringify(messages),
+    );
   } catch {}
 }
 
@@ -309,7 +316,8 @@ function isNearBottom(element) {
   const threshold = 120;
 
   return (
-    element.scrollHeight - element.scrollTop - element.clientHeight < threshold
+    element.scrollHeight - element.scrollTop - element.clientHeight <
+    threshold
   );
 }
 
@@ -389,7 +397,7 @@ function RepositoryDashboard({ dashboard, loading, error, onRefresh }) {
     : "—";
 
   return (
-    <div className="mt-4 max-h-[calc(100vh-170px)] overflow-y-auto overscroll-contain rounded-2xl border border-white/[0.07] bg-white/[0.018]">
+    <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.018]">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
         <div>
           <div className="text-[11px] font-semibold text-white/70">
@@ -415,7 +423,10 @@ function RepositoryDashboard({ dashboard, loading, error, onRefresh }) {
             disabled={loading}
             className="rounded-lg border border-white/[0.07] p-1.5 text-white/35 hover:bg-white/[0.05] hover:text-white disabled:opacity-30"
           >
-            <Icon name="refresh" className={loading ? "animate-spin" : ""} />
+            <Icon
+              name="refresh"
+              className={loading ? "animate-spin" : ""}
+            />
           </button>
         </div>
       </div>
@@ -542,8 +553,9 @@ function RepositoryDashboard({ dashboard, loading, error, onRefresh }) {
                 </div>
 
                 <div className="mt-2 text-[9px] text-white/25">
-                  {latestJob.stage || "—"} · {latestJob.result_chunks ?? 0}{" "}
-                  chunks · {latestJob.result_vectors ?? 0} vectors
+                  {latestJob.stage || "—"} ·{" "}
+                  {latestJob.result_chunks ?? 0} chunks ·{" "}
+                  {latestJob.result_vectors ?? 0} vectors
                 </div>
               </>
             ) : (
@@ -649,7 +661,9 @@ function ExplorerFileViewer({ repositoryId, filePath, onClose }) {
         }
       } catch (error) {
         if (!cancelled) {
-          setError(getErrorMessage(error, "Unable to load source file."));
+          setError(
+            getErrorMessage(error, "Unable to load source file."),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -668,7 +682,9 @@ function ExplorerFileViewer({ repositoryId, filePath, onClose }) {
   if (loading) {
     return (
       <div className="flex h-full min-h-[360px] items-center justify-center">
-        <div className="text-[10px] text-white/25">Loading {filePath}...</div>
+        <div className="text-[10px] text-white/25">
+          Loading {filePath}...
+        </div>
       </div>
     );
   }
@@ -753,14 +769,14 @@ export default function Home() {
   const [connectingRepo, setConnectingRepo] = useState(false);
   const [repoError, setRepoError] = useState("");
 
-  const [disconnectTarget, setDisconnectTarget] = useState(null);
-  const [disconnectingRepo, setDisconnectingRepo] = useState(false);
-  const [disconnectError, setDisconnectError] = useState("");
-
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
-  const [chatStage, setChatStage] = useState("Searching indexed code...");
+  const [chatStage, setChatStage] = useState(
+    "Searching indexed code...",
+  );
   const [chatError, setChatError] = useState("");
+
+  const [messages, setMessages] = useState([]);
 
   const [suggestedQuestions, setSuggestedQuestions] = useState([
     "What is the main architecture of this project?",
@@ -769,20 +785,9 @@ export default function Home() {
   ]);
 
   const [mobileSidebar, setMobileSidebar] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [expandedSource, setExpandedSource] = useState(null);
 
-  /*
-   * UI surface state.
-   * Only one workspace surface is visible at a time.
-   */
-  const [activeSurface, setActiveSurface] = useState("chat");
+  const [expandedSource, setExpandedSource] = useState(null);
   const [showSources, setShowSources] = useState({});
-  const chatScrollRef = useRef(null);
-  const questionRef = useRef(null);
-  const shouldAutoScrollRef = useRef(true);
-  const historyLoadedRef = useRef(false);
-  const restoredChatScrollRef = useRef(false);
 
   const [sourceViewer, setSourceViewer] = useState(null);
   const [sourceLoading, setSourceLoading] = useState(false);
@@ -798,11 +803,11 @@ export default function Home() {
   const [dashboard, setDashboard] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
-  const [showDashboard, setShowDashboard] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(true);
 
   const [gitStatus, setGitStatus] = useState(null);
   const [gitChecking, setGitChecking] = useState(false);
-  const [showGitTools, setShowGitTools] = useState(false);
+  const [showGitTools, setShowGitTools] = useState(true);
   const [gitBase, setGitBase] = useState("main");
   const [gitTarget, setGitTarget] = useState("");
   const [gitComparison, setGitComparison] = useState(null);
@@ -822,6 +827,11 @@ export default function Home() {
 
   const [requestController, setRequestController] = useState(null);
 
+  const chatScrollRef = useRef(null);
+  const questionRef = useRef(null);
+  const shouldAutoScrollRef = useRef(true);
+  const historyLoadedRef = useRef(false);
+
   const indexed = selectedRepo?.status === "indexed";
 
   const filteredExplorerFiles = useMemo(() => {
@@ -831,7 +841,9 @@ export default function Home() {
       return explorerFiles;
     }
 
-    return explorerFiles.filter((file) => file.toLowerCase().includes(query));
+    return explorerFiles.filter((file) =>
+      file.toLowerCase().includes(query),
+    );
   }, [explorerFiles, explorerSearch]);
 
   const statusLabel = useMemo(() => {
@@ -879,11 +891,15 @@ export default function Home() {
         }
 
         return (
-          items.find((workspace) => workspace.id === current?.id) || items[0]
+          items.find(
+            (workspace) => workspace.id === current?.id,
+          ) || items[0]
         );
       });
     } catch (error) {
-      setWorkspaceError(getErrorMessage(error, "Unable to load workspaces."));
+      setWorkspaceError(
+        getErrorMessage(error, "Unable to load workspaces."),
+      );
       setWorkspaces([]);
       setSelectedWorkspace(null);
     } finally {
@@ -899,13 +915,18 @@ export default function Home() {
       const params = new URLSearchParams();
 
       if (selectedWorkspace?.id) {
-        params.set("workspace_id", String(selectedWorkspace.id));
+        params.set(
+          "workspace_id",
+          String(selectedWorkspace.id),
+        );
       }
 
       const query = params.toString();
 
       const response = await fetch(
-        `${API_BASE}/repositories${query ? `?${query}` : ""}`,
+        `${API_BASE}/repositories${
+          query ? `?${query}` : ""
+        }`,
         {
           credentials: "include",
           cache: "no-store",
@@ -935,10 +956,16 @@ export default function Home() {
           return null;
         }
 
-        return repos.find((repo) => repo.id === current?.id) || repos[0];
+        return (
+          repos.find(
+            (repo) => repo.id === current?.id,
+          ) || repos[0]
+        );
       });
     } catch (error) {
-      setRepoLoadError(getErrorMessage(error, "Unable to load repositories."));
+      setRepoLoadError(
+        getErrorMessage(error, "Unable to load repositories."),
+      );
       setRepositories([]);
       setSelectedRepo(null);
     } finally {
@@ -947,117 +974,12 @@ export default function Home() {
   }, [selectedWorkspace?.id]);
 
   useEffect(() => {
-    let cancelled = false;
+    loadWorkspaces();
+  }, [loadWorkspaces]);
 
-    async function initializeRepoPilot() {
-      setLoadingWorkspaces(true);
-      setLoadingRepos(true);
-      setWorkspaceError("");
-      setRepoLoadError("");
-
-      try {
-        const workspaceResponse = await fetch(`${API_BASE}/workspaces`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-
-        const workspaceData = await workspaceResponse.json();
-
-        if (!workspaceResponse.ok) {
-          throw new Error(
-            typeof workspaceData?.detail === "string"
-              ? workspaceData.detail
-              : "Unable to load workspaces.",
-          );
-        }
-
-        const workspacesData = Array.isArray(workspaceData)
-          ? workspaceData
-          : Array.isArray(workspaceData?.workspaces)
-            ? workspaceData.workspaces
-            : [];
-
-        if (cancelled) return;
-
-        setWorkspaces(workspacesData);
-
-        const workspace =
-          workspacesData.find(
-            (workspace) => workspace.id === selectedWorkspace?.id,
-          ) ||
-          workspacesData[0] ||
-          null;
-
-        setSelectedWorkspace(workspace);
-
-        const params = new URLSearchParams();
-
-        if (workspace?.id) {
-          params.set("workspace_id", String(workspace.id));
-        }
-
-        const query = params.toString();
-
-        const repositoryResponse = await fetch(
-          `${API_BASE}/repositories${query ? `?${query}` : ""}`,
-          {
-            credentials: "include",
-            cache: "no-store",
-          },
-        );
-
-        const repositoryData = await repositoryResponse.json();
-
-        if (!repositoryResponse.ok) {
-          throw new Error(
-            typeof repositoryData?.detail === "string"
-              ? repositoryData.detail
-              : "Unable to load repositories.",
-          );
-        }
-
-        const repositoriesData = Array.isArray(repositoryData)
-          ? repositoryData
-          : [];
-
-        if (cancelled) return;
-
-        setRepositories(repositoriesData);
-
-        setSelectedRepo((current) => {
-          if (!repositoriesData.length) {
-            return null;
-          }
-
-          return (
-            repositoriesData.find((repo) => repo.id === current?.id) ||
-            repositoriesData[0]
-          );
-        });
-      } catch (error) {
-        if (cancelled) return;
-
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to load RepoPilot data.";
-
-        setWorkspaceError(message);
-        setRepoLoadError(message);
-      } finally {
-        if (!cancelled) {
-          setLoadingWorkspaces(false);
-          setLoadingRepos(false);
-        }
-      }
-    }
-
-    initializeRepoPilot();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useEffect(() => {
+    loadRepositories();
+  }, [loadRepositories]);
 
   async function loadDashboard(repoId) {
     if (!repoId) {
@@ -1095,7 +1017,10 @@ export default function Home() {
     } catch (error) {
       setDashboard(null);
       setDashboardError(
-        getErrorMessage(error, "Unable to load repository dashboard."),
+        getErrorMessage(
+          error,
+          "Unable to load repository dashboard.",
+        ),
       );
     } finally {
       setLoadingDashboard(false);
@@ -1112,10 +1037,13 @@ export default function Home() {
     setExplorerError("");
 
     try {
-      const response = await fetch(`${API_BASE}/repositories/${repoId}/files`, {
-        credentials: "include",
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `${API_BASE}/repositories/${repoId}/files`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
 
       let data = {};
 
@@ -1131,10 +1059,15 @@ export default function Home() {
         );
       }
 
-      setExplorerFiles(Array.isArray(data?.files) ? data.files : []);
+      setExplorerFiles(
+        Array.isArray(data?.files) ? data.files : [],
+      );
     } catch (error) {
       setExplorerError(
-        getErrorMessage(error, "Unable to load repository files."),
+        getErrorMessage(
+          error,
+          "Unable to load repository files.",
+        ),
       );
     } finally {
       setExplorerLoading(false);
@@ -1177,7 +1110,10 @@ export default function Home() {
     } catch (error) {
       setArchitecture(null);
       setArchitectureError(
-        getErrorMessage(error, "Unable to load architecture analysis."),
+        getErrorMessage(
+          error,
+          "Unable to load architecture analysis.",
+        ),
       );
     } finally {
       setArchitectureLoading(false);
@@ -1215,7 +1151,10 @@ export default function Home() {
       setGitStatus(data);
     } catch (error) {
       setGitStatus({
-        error: getErrorMessage(error, "Unable to check Git status."),
+        error: getErrorMessage(
+          error,
+          "Unable to check Git status.",
+        ),
       });
     } finally {
       setGitChecking(false);
@@ -1224,21 +1163,25 @@ export default function Home() {
 
   async function refreshRepository(repoId) {
     try {
-      const response = await fetch(`${API_BASE}/repositories/${repoId}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `${API_BASE}/repositories/${repoId}`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
 
       if (!response.ok) return;
 
       const repo = await response.json();
 
       setRepositories((current) =>
-        current.map((item) => (item.id === repo.id ? repo : item)),
+        current.map((item) =>
+          item.id === repo.id ? repo : item,
+        ),
       );
 
       setSelectedRepo(repo);
-      switchSurface("chat");
     } catch {}
   }
 
@@ -1269,7 +1212,11 @@ export default function Home() {
   }, [showExplorer, selectedRepo?.id]);
 
   useEffect(() => {
-    if (showArchitecture && selectedRepo?.id && !architecture) {
+    if (
+      showArchitecture &&
+      selectedRepo?.id &&
+      !architecture
+    ) {
       loadArchitecture(selectedRepo.id);
     }
   }, [showArchitecture, selectedRepo?.id, architecture]);
@@ -1283,7 +1230,9 @@ export default function Home() {
       return;
     }
 
-    const history = loadConversationHistory(selectedRepo.id);
+    const history = loadConversationHistory(
+      selectedRepo.id,
+    );
 
     setMessages(history);
     historyLoadedRef.current = true;
@@ -1298,52 +1247,24 @@ export default function Home() {
   }, [selectedRepo?.id]);
 
   useEffect(() => {
-    if (!selectedRepo?.id || !historyLoadedRef.current) {
+    if (
+      !selectedRepo?.id ||
+      !historyLoadedRef.current
+    ) {
       return;
     }
 
-    saveConversationHistory(selectedRepo.id, messages);
+    saveConversationHistory(
+      selectedRepo.id,
+      messages,
+    );
   }, [selectedRepo?.id, messages]);
 
   useEffect(() => {
-    if (indexed && !asking && activeSurface === "chat") {
+    if (indexed && !asking) {
       questionRef.current?.focus();
     }
-  }, [indexed, asking, selectedRepo?.id, activeSurface]);
-
-  useEffect(() => {
-    const element = chatScrollRef.current;
-
-    if (!element || activeSurface !== "chat" || messages.length === 0) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      if (shouldAutoScrollRef.current) {
-        element.scrollTop = element.scrollHeight;
-        return;
-      }
-
-      if (
-        typeof window !== "undefined" &&
-        selectedRepo?.id &&
-        !restoredChatScrollRef.current
-      ) {
-        const stored = Number(
-          window.sessionStorage.getItem(
-            `repopilot-chat-scroll-${selectedRepo.id}`,
-          ),
-        );
-
-        if (Number.isFinite(stored) && stored > 0) {
-          const max = Math.max(0, element.scrollHeight - element.clientHeight);
-          element.scrollTop = Math.min(stored, max);
-        }
-
-        restoredChatScrollRef.current = true;
-      }
-    });
-  }, [messages, asking, activeSurface, selectedRepo?.id]);
+  }, [indexed, asking, selectedRepo?.id]);
 
   function selectWorkspace(workspace) {
     if (!workspace) return;
@@ -1356,7 +1277,6 @@ export default function Home() {
 
     setSelectedWorkspace(workspace);
     setSelectedRepo(null);
-    switchSurface("chat");
 
     setMessages([]);
     setArchitecture(null);
@@ -1444,13 +1364,18 @@ export default function Home() {
       const params = new URLSearchParams();
 
       if (selectedWorkspace?.id) {
-        params.set("workspace_id", String(selectedWorkspace.id));
+        params.set(
+          "workspace_id",
+          String(selectedWorkspace.id),
+        );
       }
 
       const query = params.toString();
 
       const response = await fetch(
-        `${API_BASE}/repositories${query ? `?${query}` : ""}`,
+        `${API_BASE}/repositories${
+          query ? `?${query}` : ""
+        }`,
         {
           method: "POST",
           credentials: "include",
@@ -1481,15 +1406,18 @@ export default function Home() {
       const repo = data;
 
       setRepositories((current) => {
-        const exists = current.some((item) => item.id === repo.id);
+        const exists = current.some(
+          (item) => item.id === repo.id,
+        );
 
         return exists
-          ? current.map((item) => (item.id === repo.id ? repo : item))
+          ? current.map((item) =>
+              item.id === repo.id ? repo : item,
+            )
           : [repo, ...current];
       });
 
       setSelectedRepo(repo);
-      switchSurface("chat");
 
       setRepoUrl("");
       setRepoBranch("main");
@@ -1499,96 +1427,14 @@ export default function Home() {
       setExpandedSource(null);
       setShowSources({});
     } catch (error) {
-      setRepoError(getErrorMessage(error, "Unable to connect repository."));
+      setRepoError(
+        getErrorMessage(
+          error,
+          "Unable to connect repository.",
+        ),
+      );
     } finally {
       setConnectingRepo(false);
-    }
-  }
-
-  async function disconnectRepository() {
-    const repo = disconnectTarget;
-
-    if (!repo?.id || disconnectingRepo) return;
-
-    setDisconnectingRepo(true);
-    setDisconnectError("");
-
-    try {
-      if (asking) {
-        requestController?.abort();
-      }
-
-      const response = await fetch(`${API_BASE}/repositories/${repo.id}`, {
-        method: "DELETE",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      let data = {};
-      try {
-        data = await response.json();
-      } catch {}
-
-      if (!response.ok) {
-        throw new Error(
-          typeof data?.detail === "string"
-            ? data.detail
-            : "Unable to disconnect repository.",
-        );
-      }
-
-      const remaining = repositories.filter((item) => item.id !== repo.id);
-
-      setRepositories(remaining);
-      setSelectedRepo((current) =>
-        current?.id === repo.id ? remaining[0] || null : current,
-      );
-
-      setDisconnectTarget(null);
-      setDisconnectError("");
-      shouldAutoScrollRef.current = true;
-
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(historyKey(repo.id));
-        window.sessionStorage.removeItem(`repopilot-chat-scroll-${repo.id}`);
-      }
-
-      setMessages([]);
-      setQuestion("");
-      setExpandedSource(null);
-      setShowSources({});
-      setSourceViewer(null);
-      setExplorerFiles([]);
-      setExplorerOpenFile(null);
-      setExplorerSearch("");
-      setDashboard(null);
-      setDashboardError("");
-      setArchitecture(null);
-      setArchitectureError("");
-      setGitStatus(null);
-      setGitComparison(null);
-      setGitCommitSha("");
-      setGitCommitInfo(null);
-      setPrNumber("");
-      setPrResult(null);
-      setPrError("");
-      setIndexMessage("");
-      setChatError("");
-      setSuggestedQuestions([
-        "What does this project do?",
-        "Explain the architecture.",
-        "Find potential bugs.",
-      ]);
-
-      switchSurface("chat");
-    } catch (error) {
-      setDisconnectError(
-        error instanceof Error
-          ? error.message
-          : "Unable to disconnect repository.",
-      );
-    } finally {
-      setDisconnectingRepo(false);
     }
   }
 
@@ -1602,10 +1448,13 @@ export default function Home() {
     setIndexStage("Starting indexing...");
 
     try {
-      const response = await fetch(`${API_BASE}/repositories/${repoId}/index`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${API_BASE}/repositories/${repoId}/index`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
 
       let data = {};
 
@@ -1624,7 +1473,9 @@ export default function Home() {
       const jobId = data?.id || data?.job_id;
 
       if (!jobId) {
-        throw new Error("Indexing started but no job ID was returned.");
+        throw new Error(
+          "Indexing started but no job ID was returned.",
+        );
       }
 
       setIndexStage("Indexing repository...");
@@ -1632,7 +1483,9 @@ export default function Home() {
       let finished = false;
 
       while (!finished) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000),
+        );
 
         const jobResponse = await fetch(
           `${API_BASE}/repositories/${repoId}/jobs/${jobId}`,
@@ -1656,11 +1509,21 @@ export default function Home() {
           );
         }
 
-        const jobStatus = String(job?.status || "").toLowerCase();
+        const jobStatus = String(
+          job?.status || "",
+        ).toLowerCase();
 
-        if (jobStatus === "queued" || jobStatus === "pending") {
-          setIndexStage("Waiting for indexing worker...");
-        } else if (jobStatus === "running" || jobStatus === "processing") {
+        if (
+          jobStatus === "queued" ||
+          jobStatus === "pending"
+        ) {
+          setIndexStage(
+            "Waiting for indexing worker...",
+          );
+        } else if (
+          jobStatus === "running" ||
+          jobStatus === "processing"
+        ) {
           setIndexStage("Indexing repository...");
         } else if (
           jobStatus === "completed" ||
@@ -1670,9 +1533,14 @@ export default function Home() {
         ) {
           finished = true;
           setIndexStage("Finalizing index...");
-        } else if (jobStatus === "failed" || jobStatus === "error") {
+        } else if (
+          jobStatus === "failed" ||
+          jobStatus === "error"
+        ) {
           throw new Error(
-            job?.error || job?.message || "Repository indexing failed.",
+            job?.error ||
+              job?.message ||
+              "Repository indexing failed.",
           );
         }
       }
@@ -1681,7 +1549,10 @@ export default function Home() {
       await loadDashboard(repoId);
       await checkGitStatus(repoId);
     } catch (error) {
-      const message = getErrorMessage(error, "Repository indexing failed.");
+      const message = getErrorMessage(
+        error,
+        "Repository indexing failed.",
+      );
 
       setIndexMessage(message);
 
@@ -1705,7 +1576,12 @@ export default function Home() {
   async function askQuestion(value) {
     const prompt = (value ?? question).trim();
 
-    if (!prompt || !selectedRepo || !indexed || asking) {
+    if (
+      !prompt ||
+      !selectedRepo ||
+      !indexed ||
+      asking
+    ) {
       return;
     }
 
@@ -1736,42 +1612,60 @@ export default function Home() {
       metrics: null,
     };
 
-    setMessages((current) => [...current, userMessage, assistantMessage]);
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      assistantMessage,
+    ]);
 
     requestAnimationFrame(() => {
       const element = chatScrollRef.current;
 
-      if (element && shouldAutoScrollRef.current) {
+      if (
+        element &&
+        shouldAutoScrollRef.current
+      ) {
         element.scrollTop = element.scrollHeight;
       }
     });
 
-    const answerStageTimer = window.setTimeout(() => {
-      setChatStage("Generating grounded answer...");
-    }, 1400);
+    const answerStageTimer =
+      window.setTimeout(() => {
+        setChatStage(
+          "Generating grounded answer...",
+        );
+      }, 1400);
 
-    const finalStageTimer = window.setTimeout(() => {
-      setChatStage("Writing response...");
-    }, 5000);
+    const finalStageTimer =
+      window.setTimeout(() => {
+        setChatStage("Writing response...");
+      }, 5000);
 
-    const commitMatch = prompt.match(/\bcommit\s+([0-9a-f]{7,64})\b/i);
+    const commitMatch = prompt.match(
+      /\bcommit\s+([0-9a-f]{7,64})\b/i,
+    );
 
-    const commitSha = commitMatch ? commitMatch[1] : null;
+    const commitSha = commitMatch
+      ? commitMatch[1]
+      : null;
 
     try {
-      const response = await fetch(`${API_BASE}/chat/stream`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${API_BASE}/chat/stream`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            repository_id: selectedRepo.id,
+            message: prompt,
+            commit_sha: commitSha,
+          }),
         },
-        signal: controller.signal,
-        body: JSON.stringify({
-          repository_id: selectedRepo.id,
-          message: prompt,
-          commit_sha: commitSha,
-        }),
-      });
+      );
 
       if (!response.ok) {
         let data = {};
@@ -1788,7 +1682,9 @@ export default function Home() {
       }
 
       if (!response.body) {
-        throw new Error("Streaming response body is unavailable.");
+        throw new Error(
+          "Streaming response body is unavailable.",
+        );
       }
 
       const reader = response.body.getReader();
@@ -1801,7 +1697,8 @@ export default function Home() {
       let streamFinished = false;
 
       while (!streamFinished) {
-        const { value, done } = await reader.read();
+        const { value, done } =
+          await reader.read();
 
         if (done) break;
 
@@ -1809,17 +1706,23 @@ export default function Home() {
           stream: true,
         });
 
-        const events = buffer.split("\n\n");
+        const events = buffer.split(
+          "\n\n",
+        );
 
         buffer = events.pop() || "";
 
         for (const event of events) {
           const lines = event
             .split("\n")
-            .filter((line) => line.startsWith("data:"));
+            .filter((line) =>
+              line.startsWith("data:"),
+            );
 
           for (const line of lines) {
-            const payload = line.slice(5).trim();
+            const payload = line
+              .slice(5)
+              .trim();
 
             if (!payload) continue;
 
@@ -1845,7 +1748,8 @@ export default function Home() {
                   message.id === assistantId
                     ? {
                         ...message,
-                        content: formatAnswer(answer),
+                        content:
+                          formatAnswer(answer),
                       }
                     : message,
                 ),
@@ -1853,7 +1757,11 @@ export default function Home() {
             }
 
             if (data?.type === "sources") {
-              sources = Array.isArray(data.sources) ? data.sources : [];
+              sources = Array.isArray(
+                data.sources,
+              )
+                ? data.sources
+                : [];
 
               setMessages((current) =>
                 current.map((message) =>
@@ -1868,7 +1776,8 @@ export default function Home() {
             }
 
             if (data?.type === "metrics") {
-              metrics = data.metrics || null;
+              metrics =
+                data.metrics || null;
 
               setMessages((current) =>
                 current.map((message) =>
@@ -1884,7 +1793,9 @@ export default function Home() {
 
             if (data?.type === "error") {
               throw new Error(
-                data.message || data.detail || "Unable to answer the question.",
+                data.message ||
+                  data.detail ||
+                  "Unable to answer the question.",
               );
             }
           }
@@ -1893,7 +1804,8 @@ export default function Home() {
         }
       }
 
-      const cleanedAnswer = formatAnswer(answer);
+      const cleanedAnswer =
+        formatAnswer(answer);
 
       setMessages((current) =>
         current.map((message) =>
@@ -1910,9 +1822,17 @@ export default function Home() {
         ),
       );
 
-      setSuggestedQuestions(buildSuggestedQuestions(prompt, cleanedAnswer));
+      setSuggestedQuestions(
+        buildSuggestedQuestions(
+          prompt,
+          cleanedAnswer,
+        ),
+      );
     } catch (error) {
-      const message = getErrorMessage(error, "Something went wrong.");
+      const message = getErrorMessage(
+        error,
+        "Something went wrong.",
+      );
 
       if (error?.name === "AbortError") {
         setMessages((current) =>
@@ -1946,8 +1866,12 @@ export default function Home() {
         );
       }
     } finally {
-      window.clearTimeout(answerStageTimer);
-      window.clearTimeout(finalStageTimer);
+      window.clearTimeout(
+        answerStageTimer,
+      );
+      window.clearTimeout(
+        finalStageTimer,
+      );
 
       setRequestController(null);
       setAsking(false);
@@ -1955,17 +1879,22 @@ export default function Home() {
   }
 
   async function compareBranches() {
-    if (!selectedRepo?.id || !gitBase.trim() || !gitTarget.trim()) {
+    if (
+      !selectedRepo?.id ||
+      !gitBase.trim() ||
+      !gitTarget.trim()
+    ) {
       return;
     }
 
     try {
       setGitComparison(null);
 
-      const params = new URLSearchParams({
-        base: gitBase.trim(),
-        target: gitTarget.trim(),
-      });
+      const params =
+        new URLSearchParams({
+          base: gitBase.trim(),
+          target: gitTarget.trim(),
+        });
 
       const response = await fetch(
         `${API_BASE}/repositories/${selectedRepo.id}/git/compare?${params.toString()}`,
@@ -1992,7 +1921,10 @@ export default function Home() {
       setGitComparison(data);
     } catch (error) {
       setGitComparison({
-        error: getErrorMessage(error, "Unable to compare branches."),
+        error: getErrorMessage(
+          error,
+          "Unable to compare branches.",
+        ),
       });
     }
   }
@@ -2035,7 +1967,10 @@ export default function Home() {
       setGitCommitInfo(data);
     } catch (error) {
       setGitCommitInfo({
-        error: getErrorMessage(error, "Unable to load commit."),
+        error: getErrorMessage(
+          error,
+          "Unable to load commit.",
+        ),
       });
     } finally {
       setGitCommitLoading(false);
@@ -2047,22 +1982,32 @@ export default function Home() {
 
     if (!sha) return;
 
-    setQuestion(`What changed in commit ${sha}?`);
+    setQuestion(
+      `What changed in commit ${sha}?`,
+    );
 
     setShowGitTools(false);
 
-    requestAnimationFrame(() => questionRef.current?.focus());
+    requestAnimationFrame(() =>
+      questionRef.current?.focus(),
+    );
   }
 
   async function analyzePullRequest() {
-    if (!selectedRepo?.id || !prNumber.trim() || prLoading) {
+    if (
+      !selectedRepo?.id ||
+      !prNumber.trim() ||
+      prLoading
+    ) {
       return;
     }
 
     const number = prNumber.trim();
 
     if (!/^\d+$/.test(number)) {
-      setPrError("Pull request number must be numeric.");
+      setPrError(
+        "Pull request number must be numeric.",
+      );
       return;
     }
 
@@ -2082,7 +2027,9 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            base_branch: selectedRepo.branch || "main",
+            base_branch:
+              selectedRepo.branch ||
+              "main",
           }),
           cache: "no-store",
         },
@@ -2104,50 +2051,54 @@ export default function Home() {
 
       setPrResult(data);
     } catch (error) {
-      setPrError(getErrorMessage(error, "Unable to analyze pull request."));
+      setPrError(
+        getErrorMessage(
+          error,
+          "Unable to analyze pull request.",
+        ),
+      );
     } finally {
       setPrLoading(false);
     }
   }
 
   function handleChatScroll() {
-    const element = chatScrollRef.current;
+    const element =
+      chatScrollRef.current;
 
     if (!element) return;
 
-    shouldAutoScrollRef.current = isNearBottom(element);
-
-    if (typeof window !== "undefined" && selectedRepo?.id) {
-      window.sessionStorage.setItem(
-        `repopilot-chat-scroll-${selectedRepo.id}`,
-        String(Math.round(element.scrollTop)),
-      );
-    }
+    shouldAutoScrollRef.current =
+      isNearBottom(element);
   }
 
   function scrollToLatest() {
-    const element = chatScrollRef.current;
+    const element =
+      chatScrollRef.current;
 
     if (!element) return;
 
     shouldAutoScrollRef.current = true;
-    element.scrollTop = element.scrollHeight;
 
-    if (typeof window !== "undefined" && selectedRepo?.id) {
-      window.sessionStorage.setItem(
-        `repopilot-chat-scroll-${selectedRepo.id}`,
-        String(Math.round(element.scrollTop)),
-      );
-    }
+    element.scrollTo({
+      top: element.scrollHeight,
+      behavior: "smooth",
+    });
   }
 
   function handleKeyDown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
       askQuestion();
     }
 
-    if (event.key === "Escape" && asking) {
+    if (
+      event.key === "Escape" &&
+      asking
+    ) {
       event.preventDefault();
       cancelQuestion();
     }
@@ -2157,16 +2108,22 @@ export default function Home() {
     if (!prompt || asking) return;
 
     setMessages((current) => {
-      const index = current.findIndex(
-        (message) =>
-          message.role === "assistant" &&
-          message.error &&
-          message.prompt === prompt,
-      );
+      const index =
+        current.findIndex(
+          (message) =>
+            message.role ===
+              "assistant" &&
+            message.error &&
+            message.prompt ===
+              prompt,
+        );
 
       return index === -1
         ? current
-        : current.filter((_, itemIndex) => itemIndex !== index);
+        : current.filter(
+            (_, itemIndex) =>
+              itemIndex !== index,
+          );
     });
 
     askQuestion(prompt);
@@ -2182,7 +2139,10 @@ export default function Home() {
   }
 
   async function openSource(source) {
-    if (!selectedRepo?.id || !source?.file_path) {
+    if (
+      !selectedRepo?.id ||
+      !source?.file_path
+    ) {
       return;
     }
 
@@ -2191,11 +2151,18 @@ export default function Home() {
     setSourceViewer(null);
 
     try {
-      const params = new URLSearchParams({
-        path: source.file_path,
-        start_line: String(source.start_line ?? 1),
-        end_line: String(source.end_line ?? source.start_line ?? 1),
-      });
+      const params =
+        new URLSearchParams({
+          path: source.file_path,
+          start_line: String(
+            source.start_line ?? 1,
+          ),
+          end_line: String(
+            source.end_line ??
+              source.start_line ??
+              1,
+          ),
+        });
 
       const response = await fetch(
         `${API_BASE}/repositories/${selectedRepo.id}/files/source/range?${params.toString()}`,
@@ -2222,51 +2189,20 @@ export default function Home() {
       setSourceViewer({
         ...data,
         similarity:
-          typeof source.similarity === "number" ? source.similarity : null,
+          typeof source.similarity ===
+          "number"
+            ? source.similarity
+            : null,
       });
     } catch (error) {
-      setSourceError(getErrorMessage(error, "Unable to open source."));
+      setSourceError(
+        getErrorMessage(
+          error,
+          "Unable to open source.",
+        ),
+      );
     } finally {
       setSourceLoading(false);
-    }
-  }
-
-  const surfaceConfig = {
-    chat: {
-      label: "Chat",
-      hint: "Ask questions about the indexed codebase.",
-    },
-    dashboard: {
-      label: "Overview",
-      hint: "Repository health, index state, and job history.",
-    },
-    explorer: {
-      label: "Explorer",
-      hint: "Browse and inspect repository source files.",
-    },
-    architecture: {
-      label: "Architecture",
-      hint: "Understand structure, symbols, and routes.",
-    },
-    git: {
-      label: "Git",
-      hint: "Compare branches, inspect commits, and review PRs.",
-    },
-  };
-
-  function switchSurface(surface) {
-    const next = surfaceConfig[surface] ? surface : "chat";
-
-    setActiveSurface(next);
-    setShowDashboard(next === "dashboard");
-    setShowExplorer(next === "explorer");
-    setShowArchitecture(next === "architecture");
-    setShowGitTools(next === "git");
-    setExplorerOpenFile(null);
-    setMobileSidebar(false);
-
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("repopilot-active-surface", next);
     }
   }
 
@@ -2297,41 +2233,61 @@ export default function Home() {
 
         <div className="relative">
           <select
-            value={selectedWorkspace?.id ?? ""}
+            value={
+              selectedWorkspace?.id ?? ""
+            }
             onChange={(event) => {
-              const workspace = workspaces.find(
-                (item) => String(item.id) === event.target.value,
-              );
+              const workspace =
+                workspaces.find(
+                  (item) =>
+                    String(item.id) ===
+                    event.target.value,
+                );
 
               if (workspace) {
-                selectWorkspace(workspace);
+                selectWorkspace(
+                  workspace,
+                );
               }
             }}
-            disabled={loadingWorkspaces || workspaces.length === 0}
+            disabled={
+              loadingWorkspaces ||
+              workspaces.length === 0
+            }
             className="w-full appearance-none rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5 pr-8 text-[10px] font-medium text-white/65 outline-none hover:bg-white/[0.05] focus:border-white/[0.15] disabled:opacity-40"
             aria-label="Select workspace"
           >
             {workspaces.length === 0 ? (
-              <option value="" className="bg-[#101114]">
-                {loadingWorkspaces ? "Loading workspace..." : "No workspace"}
+              <option
+                value=""
+                className="bg-[#101114]"
+              >
+                {loadingWorkspaces
+                  ? "Loading workspace..."
+                  : "No workspace"}
               </option>
             ) : (
-              workspaces.map((workspace) => (
-                <option
-                  key={workspace.id}
-                  value={workspace.id}
-                  className="bg-[#101114] text-white"
-                >
-                  {workspace.name ||
-                    workspace.slug ||
-                    `Workspace ${workspace.id}`}
-                </option>
-              ))
+              workspaces.map(
+                (workspace) => (
+                  <option
+                    key={workspace.id}
+                    value={workspace.id}
+                    className="bg-[#101114] text-white"
+                  >
+                    {workspace.name ||
+                      workspace.slug ||
+                      `Workspace ${workspace.id}`}
+                  </option>
+                ),
+              )
             )}
           </select>
 
           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-white/25">
-            <Icon name="chevron" className="h-3 w-3" />
+            <Icon
+              name="chevron"
+              className="h-3 w-3"
+            />
           </span>
         </div>
 
@@ -2350,16 +2306,20 @@ export default function Home() {
             />
 
             <span className="text-[10px] text-white/35">
-              {statusText(selectedRepo?.status)}
+              {statusText(
+                selectedRepo?.status,
+              )}
             </span>
           </div>
 
           <div className="mt-2 truncate text-[13px] font-medium text-white/85">
-            {selectedRepo?.name || "No repository"}
+            {selectedRepo?.name ||
+              "No repository"}
           </div>
 
           <div className="mt-1 truncate text-[10px] text-white/20">
-            {selectedRepo?.branch || "main"}
+            {selectedRepo?.branch ||
+              "main"}
           </div>
         </div>
       </div>
@@ -2378,7 +2338,10 @@ export default function Home() {
             }}
             className="flex h-6 w-6 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.025] text-white/40 hover:bg-white/[0.07] hover:text-white"
           >
-            <Icon name="plus" className="h-3.5 w-3.5" />
+            <Icon
+              name="plus"
+              className="h-3.5 w-3.5"
+            />
           </button>
         </div>
 
@@ -2410,7 +2373,9 @@ export default function Home() {
 
               <button
                 type="button"
-                onClick={() => setShowNewRepo(true)}
+                onClick={() =>
+                  setShowNewRepo(true)
+                }
                 className="mt-2 text-[10px] text-white/55 hover:text-white"
               >
                 Connect one
@@ -2418,70 +2383,36 @@ export default function Home() {
             </div>
           ) : (
             repositories.map((repo) => (
-              <div
+              <button
                 key={repo.id}
-                className={`group flex items-center gap-1 rounded-lg transition ${
-                  selectedRepo?.id === repo.id
-                    ? "bg-white/[0.075]"
-                    : "hover:bg-white/[0.04]"
+                type="button"
+                onClick={() =>
+                  selectRepository(repo)
+                }
+                className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${
+                  selectedRepo?.id ===
+                  repo.id
+                    ? "bg-white/[0.075] text-white"
+                    : "text-white/45 hover:bg-white/[0.04] hover:text-white/80"
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => selectRepository(repo)}
-                  className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left ${
-                    selectedRepo?.id === repo.id
-                      ? "text-white"
-                      : "text-white/45 hover:text-white/80"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot(
-                      repo.status,
-                    )}`}
-                  />
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot(
+                    repo.status,
+                  )}`}
+                />
 
-                  <span className="min-w-0 flex-1 truncate text-[12px]">
-                    {repo.name}
+                <span className="min-w-0 flex-1 truncate text-[12px]">
+                  {repo.name}
+                </span>
+
+                {repo.status ===
+                  "indexed" && (
+                  <span className="text-[9px] text-emerald-400/45">
+                    ready
                   </span>
-
-                  {repo.status === "indexed" && (
-                    <span className="text-[9px] text-emerald-400/45">
-                      ready
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setDisconnectError("");
-                    setDisconnectTarget(repo);
-                  }}
-                  disabled={disconnectingRepo}
-                  className="mr-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/25 transition hover:bg-red-400/[0.08] hover:text-red-300 disabled:opacity-30 group-hover:flex"
-                  aria-label={`Remove ${repo.name}`}
-                  title={`Remove ${repo.name}`}
-                >
-                  {" "}
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-3.5 w-3.5"
-                    aria-hidden="true"
-                  >
-                    {" "}
-                    <path d="M4 7h16" /> <path d="M10 11v6" />{" "}
-                    <path d="M14 11v6" /> <path d="M6 7l1 13h10l1-13" />{" "}
-                    <path d="M9 7V4h6v3" />{" "}
-                  </svg>
-                </button>
-              </div>
+                )}
+              </button>
             ))
           )}
         </div>
@@ -2503,7 +2434,7 @@ export default function Home() {
   );
 
   return (
-    <main className="h-screen overflow-hidden bg-[#08090b] text-white">
+    <main className="min-h-screen bg-[#08090b] text-white">
       {sourceViewer && (
         <div className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm">
           <div className="flex h-full w-full items-center justify-center p-4">
@@ -2511,17 +2442,30 @@ export default function Home() {
               <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-[12px] font-semibold text-white/75">
-                    {sourceViewer.file_path}
+                    {
+                      sourceViewer.file_path
+                    }
                   </div>
 
                   <div className="mt-0.5 text-[9px] text-white/25">
-                    Lines {sourceViewer.start_line}–{sourceViewer.end_line}
+                    Lines{" "}
+                    {
+                      sourceViewer.start_line
+                    }
+                    –
+                    {
+                      sourceViewer.end_line
+                    }
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setSourceViewer(null)}
+                  onClick={() =>
+                    setSourceViewer(
+                      null,
+                    )
+                  }
                   className="rounded-lg border border-white/[0.07] px-3 py-1.5 text-[9px] text-white/40 hover:bg-white/[0.05] hover:text-white"
                 >
                   Close
@@ -2541,27 +2485,39 @@ export default function Home() {
               ) : (
                 <div className="min-h-0 flex-1 overflow-auto bg-[#090a0c]">
                   <div className="min-w-max p-4 font-mono text-[11px] leading-6">
-                    {(sourceViewer.content || "")
+                    {(
+                      sourceViewer.content ||
+                      ""
+                    )
                       .split("\n")
-                      .map((line, index) => {
-                        const lineNumber =
-                          (sourceViewer.start_line ?? 1) + index;
+                      .map(
+                        (
+                          line,
+                          index,
+                        ) => {
+                          const lineNumber =
+                            (sourceViewer.start_line ??
+                              1) +
+                            index;
 
-                        return (
-                          <div
-                            key={`${lineNumber}-${index}`}
-                            className="flex bg-white/[0.045]"
-                          >
-                            <span className="w-14 shrink-0 select-none pr-4 text-right text-white/40">
-                              {lineNumber}
-                            </span>
+                          return (
+                            <div
+                              key={`${lineNumber}-${index}`}
+                              className="flex bg-white/[0.045]"
+                            >
+                              <span className="w-14 shrink-0 select-none pr-4 text-right text-white/40">
+                                {
+                                  lineNumber
+                                }
+                              </span>
 
-                            <code className="whitespace-pre text-white/75">
-                              {line || " "}
-                            </code>
-                          </div>
-                        );
-                      })}
+                              <code className="whitespace-pre text-white/75">
+                                {line || " "}
+                              </code>
+                            </div>
+                          );
+                        },
+                      )}
                   </div>
                 </div>
               )}
@@ -2575,21 +2531,29 @@ export default function Home() {
           <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.09] bg-[#101114]">
             <div className="flex items-start justify-between border-b border-white/[0.06] px-5 py-4">
               <div>
-                <div className="text-sm font-semibold">Connect repository</div>
+                <div className="text-sm font-semibold">
+                  Connect repository
+                </div>
 
                 <div className="mt-1 text-[10px] text-white/30">
                   Add a repository to{" "}
-                  {selectedWorkspace?.name || "this workspace"}.
+                  {selectedWorkspace?.name ||
+                    "this workspace"}.
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={closeNewRepository}
-                disabled={connectingRepo}
+                disabled={
+                  connectingRepo
+                }
                 className="rounded-lg p-1.5 text-white/35 hover:bg-white/[0.06] hover:text-white disabled:opacity-30"
               >
-                <Icon name="close" className="h-4 w-4" />
+                <Icon
+                  name="close"
+                  className="h-4 w-4"
+                />
               </button>
             </div>
 
@@ -2607,7 +2571,11 @@ export default function Home() {
 
                 <input
                   value={repoUrl}
-                  onChange={(event) => setRepoUrl(event.target.value)}
+                  onChange={(event) =>
+                    setRepoUrl(
+                      event.target.value,
+                    )
+                  }
                   placeholder="https://github.com/username/repository"
                   className="w-full rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/[0.2]"
                   autoFocus
@@ -2621,7 +2589,11 @@ export default function Home() {
 
                 <input
                   value={repoBranch}
-                  onChange={(event) => setRepoBranch(event.target.value)}
+                  onChange={(event) =>
+                    setRepoBranch(
+                      event.target.value,
+                    )
+                  }
                   placeholder="main"
                   className="w-full rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/[0.2]"
                 />
@@ -2636,7 +2608,9 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={
-                  !repoUrl.trim() || connectingRepo || !selectedWorkspace
+                  !repoUrl.trim() ||
+                  connectingRepo ||
+                  !selectedWorkspace
                 }
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-semibold text-black hover:bg-white/90 disabled:opacity-40"
               >
@@ -2644,64 +2618,11 @@ export default function Home() {
                   <span className="h-3.5 w-3.5 animate-spin rounded-full border border-black/20 border-t-black" />
                 )}
 
-                {connectingRepo ? "Connecting…" : "Connect repository"}
+                {connectingRepo
+                  ? "Connecting…"
+                  : "Connect repository"}
               </button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {disconnectTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.09] bg-[#101114]">
-            <div className="border-b border-white/[0.06] px-5 py-4">
-              <div className="text-sm font-semibold">
-                Disconnect repository?
-              </div>
-
-              <div className="mt-2 text-[10px] leading-5 text-white/35">
-                This removes{" "}
-                <span className="text-white/60">{disconnectTarget.name}</span>{" "}
-                from this workspace and deletes its indexed data. The GitHub
-                repository itself will not be changed.
-              </div>
-            </div>
-
-            {disconnectError && (
-              <div className="mx-5 mt-4 rounded-xl border border-red-400/10 bg-red-400/[0.05] px-3 py-2.5 text-[10px] text-red-300/80">
-                {disconnectError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!disconnectingRepo) {
-                    setDisconnectTarget(null);
-                    setDisconnectError("");
-                  }
-                }}
-                disabled={disconnectingRepo}
-                className="rounded-lg border border-white/[0.07] px-3 py-2 text-[10px] text-white/40 hover:bg-white/[0.05] hover:text-white disabled:opacity-30"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={disconnectRepository}
-                disabled={disconnectingRepo}
-                className="flex items-center gap-2 rounded-lg bg-red-400 px-3 py-2 text-[10px] font-semibold text-black hover:bg-red-300 disabled:opacity-50"
-              >
-                {disconnectingRepo && (
-                  <span className="h-3 w-3 animate-spin rounded-full border border-black/20 border-t-black" />
-                )}
-                {disconnectingRepo
-                  ? "Disconnecting..."
-                  : "Disconnect repository"}
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -2711,23 +2632,31 @@ export default function Home() {
           <button
             type="button"
             className="absolute inset-0 bg-black/70"
-            onClick={() => setMobileSidebar(false)}
+            onClick={() =>
+              setMobileSidebar(false)
+            }
             aria-label="Close repositories"
           />
 
-          <div className="relative h-full w-[280px] shadow-2xl">{sidebar}</div>
+          <div className="relative h-full w-[280px] shadow-2xl">
+            {sidebar}
+          </div>
         </div>
       )}
 
-      <div className="flex h-full min-h-0">
-        <div className="hidden lg:block">{sidebar}</div>
+      <div className="flex min-h-screen">
+        <div className="hidden lg:block">
+          {sidebar}
+        </div>
 
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <section className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-white/[0.07] bg-[#08090b]/90 px-4 backdrop-blur-xl lg:px-7">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
-                onClick={() => setMobileSidebar(true)}
+                onClick={() =>
+                  setMobileSidebar(true)
+                }
                 className="rounded-lg border border-white/[0.07] p-2 text-white/50 hover:bg-white/[0.05] lg:hidden"
                 aria-label="Open repositories"
               >
@@ -2738,11 +2667,13 @@ export default function Home() {
 
               <div className="hidden min-w-0 sm:block">
                 <div className="truncate text-[10px] text-white/20">
-                  {selectedWorkspace?.name || "Workspace"}
+                  {selectedWorkspace?.name ||
+                    "Workspace"}
                 </div>
 
                 <div className="truncate text-xs font-medium text-white/45">
-                  {selectedRepo?.name || "RepoPilot"}
+                  {selectedRepo?.name ||
+                    "RepoPilot"}
                 </div>
               </div>
             </div>
@@ -2754,11 +2685,13 @@ export default function Home() {
                 )}`}
               />
 
-              <span className="text-[10px] text-white/40">{statusLabel}</span>
+              <span className="text-[10px] text-white/40">
+                {statusLabel}
+              </span>
             </div>
           </header>
 
-          <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.018]">
               <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="min-w-0">
@@ -2770,126 +2703,106 @@ export default function Home() {
                     />
 
                     <h1 className="truncate text-sm font-semibold tracking-tight">
-                      {selectedRepo?.name || "No repository selected"}
+                      {selectedRepo?.name ||
+                        "No repository selected"}
                     </h1>
                   </div>
 
-                  <div className="mt-1 flex min-w-0 items-center gap-3">
-                    {selectedRepo?.url && (
-                      <a
-                        href={selectedRepo.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex min-w-0 max-w-xl items-center gap-1 truncate text-[10px] text-white/25 hover:text-white/50"
-                      >
-                        <span className="truncate">{selectedRepo.url}</span>
+                  {selectedRepo?.url && (
+                    <a
+                      href={selectedRepo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 flex max-w-xl items-center gap-1 truncate text-[10px] text-white/25 hover:text-white/50"
+                    >
+                      <span className="truncate">
+                        {selectedRepo.url}
+                      </span>
 
-                        <Icon name="external" className="h-3 w-3 shrink-0" />
-                      </a>
-                    )}
-
-                    {selectedRepo && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDisconnectError("");
-                          setDisconnectTarget(selectedRepo);
-                        }}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/25 transition hover:bg-red-400/[0.08] hover:text-red-300"
-                        aria-label={`Remove ${selectedRepo.name}`}
-                        title={`Remove ${selectedRepo.name}`}
-                      >
-                        {" "}
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.7"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-3.5 w-3.5"
-                          aria-hidden="true"
-                        >
-                          {" "}
-                          <path d="M4 7h16" /> <path d="M10 11v6" />{" "}
-                          <path d="M14 11v6" /> <path d="M6 7l1 13h10l1-13" />{" "}
-                          <path d="M9 7V4h6v3" />{" "}
-                        </svg>{" "}
-                      </button>
-                    )}
-                  </div>
+                      <Icon
+                        name="external"
+                        className="h-3 w-3 shrink-0"
+                      />
+                    </a>
+                  )}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-0.5">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => switchSurface("chat")}
-                    className={`rounded-lg border px-3.5 py-2 text-[10px] font-medium transition ${
-                      activeSurface === "chat"
-                        ? "border-white/[0.14] bg-white/[0.07] text-white/85"
-                        : "border-white/[0.08] text-white/45 hover:bg-white/[0.05] hover:text-white"
-                    }`}
-                    aria-pressed={activeSurface === "chat"}
+                    onClick={() =>
+                      setShowDashboard(
+                        (current) =>
+                          !current,
+                      )
+                    }
+                    className="rounded-lg border border-white/[0.08] px-3.5 py-2 text-[10px] font-medium text-white/50 hover:bg-white/[0.05] hover:text-white"
                   >
-                    Chat
+                    {showDashboard
+                      ? "Hide dashboard"
+                      : "Dashboard"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => switchSurface("dashboard")}
-                    className={`rounded-lg border px-3.5 py-2 text-[10px] font-medium transition ${
-                      activeSurface === "dashboard"
-                        ? "border-white/[0.14] bg-white/[0.07] text-white/85"
-                        : "border-white/[0.08] text-white/45 hover:bg-white/[0.05] hover:text-white"
-                    }`}
-                    aria-pressed={activeSurface === "dashboard"}
+                    onClick={() =>
+                      setShowExplorer(
+                        (current) =>
+                          !current,
+                      )
+                    }
+                    className="rounded-lg border border-white/[0.08] px-3.5 py-2 text-[10px] font-medium text-white/50 hover:bg-white/[0.05] hover:text-white"
                   >
-                    Overview
+                    {showExplorer
+                      ? "Hide explorer"
+                      : "Explorer"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => switchSurface("explorer")}
-                    className={`rounded-lg border px-3.5 py-2 text-[10px] font-medium transition ${
-                      activeSurface === "explorer"
-                        ? "border-white/[0.14] bg-white/[0.07] text-white/85"
-                        : "border-white/[0.08] text-white/45 hover:bg-white/[0.05] hover:text-white"
-                    }`}
-                    aria-pressed={activeSurface === "explorer"}
-                  >
-                    Explorer
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => switchSurface("architecture")}
+                    onClick={() =>
+                      setShowArchitecture(
+                        (current) =>
+                          !current,
+                      )
+                    }
                     className={`rounded-lg border px-3.5 py-2 text-[10px] font-medium ${
                       showArchitecture
                         ? "border-white/[0.14] bg-white/[0.07] text-white/80"
                         : "border-white/[0.08] text-white/50 hover:bg-white/[0.05]"
                     }`}
-                    aria-pressed={activeSurface === "architecture"}
                   >
-                    Architecture
+                    {showArchitecture
+                      ? "Hide architecture"
+                      : "Architecture"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => switchSurface("git")}
+                    onClick={() =>
+                      setShowGitTools(
+                        (current) =>
+                          !current,
+                      )
+                    }
                     className={`rounded-lg border px-3.5 py-2 text-[10px] font-medium ${
                       showGitTools
                         ? "border-white/[0.14] bg-white/[0.07] text-white/80"
                         : "border-white/[0.08] text-white/50 hover:bg-white/[0.05]"
                     }`}
-                    aria-pressed={activeSurface === "git"}
                   >
                     Git
                   </button>
 
                   <button
                     type="button"
-                    onClick={indexRepository}
-                    disabled={!selectedRepo || indexing}
+                    onClick={
+                      indexRepository
+                    }
+                    disabled={
+                      !selectedRepo ||
+                      indexing
+                    }
                     className="rounded-lg bg-white px-3.5 py-2 text-[10px] font-semibold text-black hover:bg-white/90 disabled:opacity-35"
                   >
                     {indexing
@@ -2920,523 +2833,708 @@ export default function Home() {
               )}
             </div>
 
-            {activeSurface === "dashboard" && selectedRepo && (
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-4 pr-1">
+            {showDashboard &&
+              selectedRepo && (
                 <RepositoryDashboard
                   dashboard={dashboard}
-                  loading={loadingDashboard}
+                  loading={
+                    loadingDashboard
+                  }
                   error={dashboardError}
                   onRefresh={() =>
-                    selectedRepo?.id && loadDashboard(selectedRepo.id)
+                    selectedRepo?.id &&
+                    loadDashboard(
+                      selectedRepo.id,
+                    )
                   }
                 />
-              </div>
-            )}
+              )}
 
-            {activeSurface === "architecture" && selectedRepo && (
-              <div className="mt-4 max-h-[calc(100vh-170px)] overflow-y-auto overscroll-contain rounded-2xl border border-white/[0.07] bg-white/[0.018]">
-                <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
-                  <div>
-                    <div className="text-[11px] font-semibold text-white/70">
-                      Architecture intelligence
-                    </div>
-
-                    <div className="mt-0.5 text-[9px] text-white/25">
-                      Repository structure and dependency analysis
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      selectedRepo?.id && loadArchitecture(selectedRepo.id)
-                    }
-                    disabled={architectureLoading}
-                    className="rounded-lg border border-white/[0.07] p-1.5 text-white/35 hover:bg-white/[0.05]"
-                  >
-                    <Icon
-                      name="refresh"
-                      className={architectureLoading ? "animate-spin" : ""}
-                    />
-                  </button>
-                </div>
-
-                <div className="p-4 sm:p-5">
-                  {architectureLoading && !architecture && (
-                    <div className="text-[10px] text-white/25">
-                      Loading architecture analysis...
-                    </div>
-                  )}
-
-                  {architectureError && (
-                    <div className="rounded-xl border border-red-400/10 bg-red-400/[0.04] p-3 text-[10px] text-red-300/70">
-                      {architectureError}
-                    </div>
-                  )}
-
-                  {architecture && !architectureError && (
-                    <div className="space-y-4">
-                      <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            p: ({ children }) => (
-                              <p className="mb-4 last:mb-0 text-[11px] leading-6 text-white/50">
-                                {children}
-                              </p>
-                            ),
-                            h2: ({ children }) => (
-                              <h2 className="mb-3 mt-5 text-sm font-semibold text-white">
-                                {children}
-                              </h2>
-                            ),
-                            h3: ({ children }) => (
-                              <h3 className="mb-2 mt-4 text-xs font-semibold text-white/80">
-                                {children}
-                              </h3>
-                            ),
-                            ul: ({ children }) => (
-                              <ul className="mb-4 list-disc space-y-1.5 pl-5 text-[11px] text-white/45">
-                                {children}
-                              </ul>
-                            ),
-                            ol: ({ children }) => (
-                              <ol className="mb-4 list-decimal space-y-1.5 pl-5 text-[11px] text-white/45">
-                                {children}
-                              </ol>
-                            ),
-                          }}
-                        >
-                          {architecture.summary ||
-                            "No architecture summary available."}
-                        </ReactMarkdown>
-                      </div>
-
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
-                          <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
-                            Code files
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-white/85">
-                            {architecture.statistics?.total_code_files ?? 0}
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
-                          <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
-                            Functions
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-white/85">
-                            {architecture.statistics?.symbols?.functions ?? 0}
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
-                          <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
-                            Classes
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-white/85">
-                            {architecture.statistics?.symbols?.classes ?? 0}
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
-                          <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
-                            Routes
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-white/85">
-                            {architecture.statistics?.symbols?.routes ?? 0}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {activeSurface === "git" && selectedRepo && (
-              <div className="mt-4 max-h-[calc(100vh-170px)] overflow-y-auto overscroll-contain rounded-2xl border border-white/[0.07] bg-white/[0.018]">
-                <div className="border-b border-white/[0.06] px-4 py-3 sm:px-5">
-                  <div className="text-[11px] font-semibold text-white/70">
-                    Git integration
-                  </div>
-
-                  <div className="mt-0.5 text-[9px] text-white/25">
-                    {selectedRepo.branch || "main"}
-                  </div>
-                </div>
-
-                <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2">
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
-                        Remote status
-                      </div>
-
-                      {gitStatus && !gitStatus.error && (
-                        <span
-                          className={`rounded-full border px-2 py-1 text-[9px] ${
-                            gitStatus.needs_update
-                              ? "border-amber-400/10 bg-amber-400/[0.07] text-amber-300"
-                              : "border-emerald-400/10 bg-emerald-400/[0.07] text-emerald-300"
-                          }`}
-                        >
-                          {gitStatus.needs_update
-                            ? "Update available"
-                            : "Up to date"}
-                        </span>
-                      )}
-                    </div>
-
-                    {gitStatus?.error ? (
-                      <div className="mt-3 text-[9px] text-red-300/70">
-                        {gitStatus.error}
-                      </div>
-                    ) : (
-                      <div className="mt-3 space-y-2">
-                        <div>
-                          <div className="text-[9px] text-white/20">
-                            Indexed commit
-                          </div>
-
-                          <div className="mt-1 break-all font-mono text-[10px] text-white/45">
-                            {gitStatus?.last_indexed_commit ||
-                              selectedRepo.last_indexed_commit ||
-                              "—"}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[9px] text-white/20">
-                            Remote commit
-                          </div>
-
-                          <div className="mt-1 break-all font-mono text-[10px] text-white/45">
-                            {gitStatus?.remote_commit || "—"}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
-                    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
-                      Automatic sync
-                    </div>
-
-                    <div className="mt-2 text-[11px] text-white/55">
-                      RepoPilot checks the remote branch automatically.
-                    </div>
-
-                    <div className="mt-1 text-[9px] leading-5 text-white/25">
-                      Remote changes can trigger repository re-indexing.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-white/[0.06] p-4 sm:p-5">
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
-                    Compare branches
-                  </div>
-
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                    <input
-                      value={gitBase}
-                      onChange={(event) => setGitBase(event.target.value)}
-                      placeholder="main"
-                      className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
-                    />
-
-                    <input
-                      value={gitTarget}
-                      onChange={(event) => setGitTarget(event.target.value)}
-                      placeholder="feature/test"
-                      className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={compareBranches}
-                      disabled={!gitBase.trim() || !gitTarget.trim()}
-                      className="rounded-lg bg-white px-4 py-2 text-[10px] font-semibold text-black disabled:opacity-30"
-                    >
-                      Compare
-                    </button>
-                  </div>
-
-                  {gitComparison && (
-                    <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3">
-                      {gitComparison.error ? (
-                        <div className="text-[9px] text-red-300/70">
-                          {gitComparison.error}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap gap-3 text-[10px] text-white/45">
-                            <span>{gitComparison.files_changed} files</span>
-
-                            <span>{gitComparison.commits_count} commits</span>
-                          </div>
-
-                          <div className="mt-3 space-y-1">
-                            {(gitComparison.files || [])
-                              .slice(0, 20)
-                              .map((file, index) => (
-                                <div
-                                  key={`${file.new_path}-${index}`}
-                                  className="font-mono text-[9px] text-white/35"
-                                >
-                                  <span className="mr-2 text-white/20">
-                                    {file.change_type}
-                                  </span>
-
-                                  {file.new_path || file.old_path}
-                                </div>
-                              ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-white/[0.06] p-4 sm:p-5">
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
-                    Commit tools
-                  </div>
-
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                    <input
-                      value={gitCommitSha}
-                      onChange={(event) => setGitCommitSha(event.target.value)}
-                      placeholder="commit SHA"
-                      className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={loadCommitInfo}
-                      disabled={gitCommitLoading || !gitCommitSha.trim()}
-                      className="rounded-lg border border-white/[0.08] px-3 py-2 text-[10px] text-white/50 hover:bg-white/[0.05] disabled:opacity-30"
-                    >
-                      {gitCommitLoading ? "Loading…" : "Inspect"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={askAboutCommit}
-                      disabled={!gitCommitSha.trim()}
-                      className="rounded-lg bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30"
-                    >
-                      Ask AI
-                    </button>
-                  </div>
-
-                  {gitCommitInfo && (
-                    <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3">
-                      {gitCommitInfo.error ? (
-                        <div className="text-[9px] text-red-300/70">
-                          {gitCommitInfo.error}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="font-mono text-[10px] text-white/50">
-                            {gitCommitInfo.short_sha}
-                          </div>
-
-                          <div className="mt-1 text-[11px] text-white/65">
-                            {gitCommitInfo.message}
-                          </div>
-
-                          <div className="mt-2 text-[9px] text-white/25">
-                            Author: {gitCommitInfo.author || "—"}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-white/[0.06] p-4 sm:p-5">
-                  <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
-                    PR Assistant
-                  </div>
-
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-                    <input
-                      value={prNumber}
-                      onChange={(event) => setPrNumber(event.target.value)}
-                      placeholder="Pull request number"
-                      inputMode="numeric"
-                      className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={analyzePullRequest}
-                      disabled={prLoading || !prNumber.trim()}
-                      className="rounded-lg bg-white px-4 py-2 text-[10px] font-semibold text-black disabled:opacity-30"
-                    >
-                      {prLoading ? "Analyzing…" : "Analyze PR"}
-                    </button>
-                  </div>
-
-                  {prError && (
-                    <div className="mt-3 rounded-xl border border-red-400/10 bg-red-400/[0.04] px-3 py-2 text-[9px] text-red-300/70">
-                      {prError}
-                    </div>
-                  )}
-
-                  {prResult && (
-                    <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3">
-                      <div className="text-[10px] text-white/55">
-                        PR #{prResult.pull_request}
-                      </div>
-
-                      <div className="mt-2 text-[10px] leading-5 text-white/40">
-                        {prResult.review?.summary || "No PR summary generated."}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {activeSurface === "explorer" && selectedRepo && (
-              <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.018]">
-                <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
-                  <div>
-                    <div className="text-[11px] font-semibold text-white/70">
-                      Codebase explorer
-                    </div>
-
-                    <div className="mt-0.5 text-[9px] text-white/25">
-                      {explorerFiles.length} files
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => loadExplorerFiles(selectedRepo.id)}
-                    disabled={explorerLoading}
-                    className="rounded-lg border border-white/[0.07] p-1.5 text-white/35 hover:bg-white/[0.05]"
-                  >
-                    <Icon
-                      name="refresh"
-                      className={explorerLoading ? "animate-spin" : ""}
-                    />
-                  </button>
-                </div>
-
-                <div className="grid min-h-[360px] lg:grid-cols-[280px_1fr]">
-                  <div className="border-b border-white/[0.06] lg:border-b-0 lg:border-r">
-                    <div className="p-3">
-                      <input
-                        value={explorerSearch}
-                        onChange={(event) =>
-                          setExplorerSearch(event.target.value)
-                        }
-                        placeholder="Search files..."
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[10px] text-white/70 placeholder:text-white/20"
-                      />
-                    </div>
-
-                    {explorerError && (
-                      <div className="mx-3 mb-3 rounded-lg border border-red-400/10 bg-red-400/[0.04] px-3 py-2 text-[9px] text-red-300/70">
-                        {explorerError}
-                      </div>
-                    )}
-
-                    <div className="max-h-[420px] overflow-y-auto px-2 pb-3">
-                      {explorerLoading ? (
-                        <div className="space-y-1">
-                          {Array.from({ length: 8 }, (_, index) => (
-                            <div
-                              key={index}
-                              className="h-8 animate-pulse rounded-lg bg-white/[0.025]"
-                            />
-                          ))}
-                        </div>
-                      ) : filteredExplorerFiles.length === 0 ? (
-                        <div className="px-2 py-6 text-[10px] text-white/25">
-                          No files found.
-                        </div>
-                      ) : (
-                        filteredExplorerFiles.map((file) => (
-                          <button
-                            key={file}
-                            type="button"
-                            onClick={() => setExplorerOpenFile(file)}
-                            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left ${
-                              explorerOpenFile === file
-                                ? "bg-white/[0.07] text-white"
-                                : "text-white/40 hover:bg-white/[0.035]"
-                            }`}
-                          >
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-[7px] font-semibold text-white/25">
-                              {fileType(file)}
-                            </span>
-
-                            <span className="truncate text-[10px]">{file}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="min-w-0">
-                    {!explorerOpenFile ? (
-                      <div className="flex h-full min-h-[360px] items-center justify-center p-6 text-center">
-                        <div>
-                          <div className="text-[11px] text-white/35">
-                            Select a file
-                          </div>
-
-                          <div className="mt-1 text-[9px] text-white/15">
-                            Browse repository source here.
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <ExplorerFileViewer
-                        repositoryId={selectedRepo.id}
-                        filePath={explorerOpenFile}
-                        onClose={() => setExplorerOpenFile(null)}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeSurface === "chat" && (
-              <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
-                {messages.length === 0 ? (
-                  <div className="flex flex-1 flex-col justify-center py-10 lg:py-14">
+            {showArchitecture &&
+              selectedRepo && (
+                <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.018]">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
                     <div>
-                      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.16em] text-white/25">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
-                        Codebase intelligence
+                      <div className="text-[11px] font-semibold text-white/70">
+                        Architecture intelligence
                       </div>
 
-                      <h2 className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
-                        Ask your codebase.
-                      </h2>
-
-                      <p className="mt-3 max-w-xl text-sm leading-6 text-white/30">
-                        Architecture, implementation, bugs and files — grounded
-                        in your indexed repository.
-                      </p>
+                      <div className="mt-0.5 text-[9px] text-white/25">
+                        Repository structure and dependency analysis
+                      </div>
                     </div>
 
-                    <div className="mt-8 grid gap-2 sm:grid-cols-2">
-                      {QUICK_PROMPTS.map(([label, prompt, icon]) => (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        selectedRepo?.id &&
+                        loadArchitecture(
+                          selectedRepo.id,
+                        )
+                      }
+                      disabled={
+                        architectureLoading
+                      }
+                      className="rounded-lg border border-white/[0.07] p-1.5 text-white/35 hover:bg-white/[0.05]"
+                    >
+                      <Icon
+                        name="refresh"
+                        className={
+                          architectureLoading
+                            ? "animate-spin"
+                            : ""
+                        }
+                      />
+                    </button>
+                  </div>
+
+                  <div className="p-4 sm:p-5">
+                    {architectureLoading &&
+                      !architecture && (
+                        <div className="text-[10px] text-white/25">
+                          Loading architecture analysis...
+                        </div>
+                      )}
+
+                    {architectureError && (
+                      <div className="rounded-xl border border-red-400/10 bg-red-400/[0.04] p-3 text-[10px] text-red-300/70">
+                        {architectureError}
+                      </div>
+                    )}
+
+                    {architecture &&
+                      !architectureError && (
+                        <div className="space-y-4">
+                          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
+                            <ReactMarkdown
+                              remarkPlugins={[
+                                remarkGfm,
+                              ]}
+                              components={{
+                                p: ({
+                                  children,
+                                }) => (
+                                  <p className="mb-4 last:mb-0 text-[11px] leading-6 text-white/50">
+                                    {children}
+                                  </p>
+                                ),
+                                h2: ({
+                                  children,
+                                }) => (
+                                  <h2 className="mb-3 mt-5 text-sm font-semibold text-white">
+                                    {children}
+                                  </h2>
+                                ),
+                                h3: ({
+                                  children,
+                                }) => (
+                                  <h3 className="mb-2 mt-4 text-xs font-semibold text-white/80">
+                                    {children}
+                                  </h3>
+                                ),
+                                ul: ({
+                                  children,
+                                }) => (
+                                  <ul className="mb-4 list-disc space-y-1.5 pl-5 text-[11px] text-white/45">
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({
+                                  children,
+                                }) => (
+                                  <ol className="mb-4 list-decimal space-y-1.5 pl-5 text-[11px] text-white/45">
+                                    {children}
+                                  </ol>
+                                ),
+                              }}
+                            >
+                              {architecture.summary ||
+                                "No architecture summary available."}
+                            </ReactMarkdown>
+                          </div>
+
+                          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
+                              <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
+                                Code files
+                              </div>
+                              <div className="mt-2 text-xl font-semibold text-white/85">
+                                {
+                                  architecture
+                                    .statistics
+                                    ?.total_code_files ??
+                                  0
+                                }
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
+                              <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
+                                Functions
+                              </div>
+                              <div className="mt-2 text-xl font-semibold text-white/85">
+                                {
+                                  architecture
+                                    .statistics
+                                    ?.symbols
+                                    ?.functions ??
+                                  0
+                                }
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
+                              <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
+                                Classes
+                              </div>
+                              <div className="mt-2 text-xl font-semibold text-white/85">
+                                {
+                                  architecture
+                                    .statistics
+                                    ?.symbols
+                                    ?.classes ??
+                                  0
+                                }
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
+                              <div className="text-[9px] uppercase tracking-[0.15em] text-white/20">
+                                Routes
+                              </div>
+                              <div className="mt-2 text-xl font-semibold text-white/85">
+                                {
+                                  architecture
+                                    .statistics
+                                    ?.symbols
+                                    ?.routes ??
+                                  0
+                                }
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
+
+            {showGitTools &&
+              selectedRepo && (
+                <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.018]">
+                  <div className="border-b border-white/[0.06] px-4 py-3 sm:px-5">
+                    <div className="text-[11px] font-semibold text-white/70">
+                      Git integration
+                    </div>
+
+                    <div className="mt-0.5 text-[9px] text-white/25">
+                      {selectedRepo.branch ||
+                        "main"}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2">
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
+                          Remote status
+                        </div>
+
+                        {gitStatus &&
+                          !gitStatus.error && (
+                            <span
+                              className={`rounded-full border px-2 py-1 text-[9px] ${
+                                gitStatus.needs_update
+                                  ? "border-amber-400/10 bg-amber-400/[0.07] text-amber-300"
+                                  : "border-emerald-400/10 bg-emerald-400/[0.07] text-emerald-300"
+                              }`}
+                            >
+                              {gitStatus.needs_update
+                                ? "Update available"
+                                : "Up to date"}
+                            </span>
+                          )}
+                      </div>
+
+                      {gitStatus?.error ? (
+                        <div className="mt-3 text-[9px] text-red-300/70">
+                          {gitStatus.error}
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <div>
+                            <div className="text-[9px] text-white/20">
+                              Indexed commit
+                            </div>
+
+                            <div className="mt-1 break-all font-mono text-[10px] text-white/45">
+                              {gitStatus?.last_indexed_commit ||
+                                selectedRepo.last_indexed_commit ||
+                                "—"}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[9px] text-white/20">
+                              Remote commit
+                            </div>
+
+                            <div className="mt-1 break-all font-mono text-[10px] text-white/45">
+                              {gitStatus?.remote_commit ||
+                                "—"}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.018] p-3">
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
+                        Automatic sync
+                      </div>
+
+                      <div className="mt-2 text-[11px] text-white/55">
+                        RepoPilot checks the remote branch automatically.
+                      </div>
+
+                      <div className="mt-1 text-[9px] leading-5 text-white/25">
+                        Remote changes can trigger repository re-indexing.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-white/[0.06] p-4 sm:p-5">
+                    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
+                      Compare branches
+                    </div>
+
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <input
+                        value={gitBase}
+                        onChange={(event) =>
+                          setGitBase(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="main"
+                        className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
+                      />
+
+                      <input
+                        value={gitTarget}
+                        onChange={(event) =>
+                          setGitTarget(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="feature/test"
+                        className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={
+                          compareBranches
+                        }
+                        disabled={
+                          !gitBase.trim() ||
+                          !gitTarget.trim()
+                        }
+                        className="rounded-lg bg-white px-4 py-2 text-[10px] font-semibold text-black disabled:opacity-30"
+                      >
+                        Compare
+                      </button>
+                    </div>
+
+                    {gitComparison && (
+                      <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                        {gitComparison.error ? (
+                          <div className="text-[9px] text-red-300/70">
+                            {
+                              gitComparison.error
+                            }
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap gap-3 text-[10px] text-white/45">
+                              <span>
+                                {
+                                  gitComparison.files_changed
+                                }{" "}
+                                files
+                              </span>
+
+                              <span>
+                                {
+                                  gitComparison.commits_count
+                                }{" "}
+                                commits
+                              </span>
+                            </div>
+
+                            <div className="mt-3 space-y-1">
+                              {(
+                                gitComparison.files ||
+                                []
+                              )
+                                .slice(0, 20)
+                                .map(
+                                  (
+                                    file,
+                                    index,
+                                  ) => (
+                                    <div
+                                      key={`${file.new_path}-${index}`}
+                                      className="font-mono text-[9px] text-white/35"
+                                    >
+                                      <span className="mr-2 text-white/20">
+                                        {
+                                          file.change_type
+                                        }
+                                      </span>
+
+                                      {
+                                        file.new_path ||
+                                        file.old_path
+                                      }
+                                    </div>
+                                  ),
+                                )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-white/[0.06] p-4 sm:p-5">
+                    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
+                      Commit tools
+                    </div>
+
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                      <input
+                        value={
+                          gitCommitSha
+                        }
+                        onChange={(event) =>
+                          setGitCommitSha(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="commit SHA"
+                        className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={
+                          loadCommitInfo
+                        }
+                        disabled={
+                          gitCommitLoading ||
+                          !gitCommitSha.trim()
+                        }
+                        className="rounded-lg border border-white/[0.08] px-3 py-2 text-[10px] text-white/50 hover:bg-white/[0.05] disabled:opacity-30"
+                      >
+                        {gitCommitLoading
+                          ? "Loading…"
+                          : "Inspect"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={
+                          askAboutCommit
+                        }
+                        disabled={
+                          !gitCommitSha.trim()
+                        }
+                        className="rounded-lg bg-white px-3 py-2 text-[10px] font-semibold text-black disabled:opacity-30"
+                      >
+                        Ask AI
+                      </button>
+                    </div>
+
+                    {gitCommitInfo && (
+                      <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                        {gitCommitInfo.error ? (
+                          <div className="text-[9px] text-red-300/70">
+                            {
+                              gitCommitInfo.error
+                            }
+                          </div>
+                        ) : (
+                          <>
+                            <div className="font-mono text-[10px] text-white/50">
+                              {
+                                gitCommitInfo.short_sha
+                              }
+                            </div>
+
+                            <div className="mt-1 text-[11px] text-white/65">
+                              {
+                                gitCommitInfo.message
+                              }
+                            </div>
+
+                            <div className="mt-2 text-[9px] text-white/25">
+                              Author:{" "}
+                              {
+                                gitCommitInfo.author ||
+                                "—"
+                              }
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-white/[0.06] p-4 sm:p-5">
+                    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
+                      PR Assistant
+                    </div>
+
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <input
+                        value={prNumber}
+                        onChange={(event) =>
+                          setPrNumber(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Pull request number"
+                        inputMode="numeric"
+                        className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/70"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={
+                          analyzePullRequest
+                        }
+                        disabled={
+                          prLoading ||
+                          !prNumber.trim()
+                        }
+                        className="rounded-lg bg-white px-4 py-2 text-[10px] font-semibold text-black disabled:opacity-30"
+                      >
+                        {prLoading
+                          ? "Analyzing…"
+                          : "Analyze PR"}
+                      </button>
+                    </div>
+
+                    {prError && (
+                      <div className="mt-3 rounded-xl border border-red-400/10 bg-red-400/[0.04] px-3 py-2 text-[9px] text-red-300/70">
+                        {prError}
+                      </div>
+                    )}
+
+                    {prResult && (
+                      <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                        <div className="text-[10px] text-white/55">
+                          PR #{prResult.pull_request}
+                        </div>
+
+                        <div className="mt-2 text-[10px] leading-5 text-white/40">
+                          {prResult.review
+                            ?.summary ||
+                            "No PR summary generated."}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            {showExplorer &&
+              selectedRepo && (
+                <div className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.018]">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
+                    <div>
+                      <div className="text-[11px] font-semibold text-white/70">
+                        Codebase explorer
+                      </div>
+
+                      <div className="mt-0.5 text-[9px] text-white/25">
+                        {
+                          explorerFiles.length
+                        }{" "}
+                        files
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        loadExplorerFiles(
+                          selectedRepo.id,
+                        )
+                      }
+                      disabled={
+                        explorerLoading
+                      }
+                      className="rounded-lg border border-white/[0.07] p-1.5 text-white/35 hover:bg-white/[0.05]"
+                    >
+                      <Icon
+                        name="refresh"
+                        className={
+                          explorerLoading
+                            ? "animate-spin"
+                            : ""
+                        }
+                      />
+                    </button>
+                  </div>
+
+                  <div className="grid min-h-[360px] lg:grid-cols-[280px_1fr]">
+                    <div className="border-b border-white/[0.06] lg:border-b-0 lg:border-r">
+                      <div className="p-3">
+                        <input
+                          value={
+                            explorerSearch
+                          }
+                          onChange={(event) =>
+                            setExplorerSearch(
+                              event.target.value,
+                            )
+                          }
+                          placeholder="Search files..."
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[10px] text-white/70 placeholder:text-white/20"
+                        />
+                      </div>
+
+                      {explorerError && (
+                        <div className="mx-3 mb-3 rounded-lg border border-red-400/10 bg-red-400/[0.04] px-3 py-2 text-[9px] text-red-300/70">
+                          {
+                            explorerError
+                          }
+                        </div>
+                      )}
+
+                      <div className="max-h-[420px] overflow-y-auto px-2 pb-3">
+                        {explorerLoading ? (
+                          <div className="space-y-1">
+                            {Array.from(
+                              { length: 8 },
+                              (_, index) => (
+                                <div
+                                  key={index}
+                                  className="h-8 animate-pulse rounded-lg bg-white/[0.025]"
+                                />
+                              ),
+                            )}
+                          </div>
+                        ) : filteredExplorerFiles.length ===
+                          0 ? (
+                          <div className="px-2 py-6 text-[10px] text-white/25">
+                            No files found.
+                          </div>
+                        ) : (
+                          filteredExplorerFiles.map(
+                            (file) => (
+                              <button
+                                key={file}
+                                type="button"
+                                onClick={() =>
+                                  setExplorerOpenFile(
+                                    file,
+                                  )
+                                }
+                                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left ${
+                                  explorerOpenFile ===
+                                  file
+                                    ? "bg-white/[0.07] text-white"
+                                    : "text-white/40 hover:bg-white/[0.035]"
+                                }`}
+                              >
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-[7px] font-semibold text-white/25">
+                                  {fileType(
+                                    file,
+                                  )}
+                                </span>
+
+                                <span className="truncate text-[10px]">
+                                  {file}
+                                </span>
+                              </button>
+                            ),
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      {!explorerOpenFile ? (
+                        <div className="flex h-full min-h-[360px] items-center justify-center p-6 text-center">
+                          <div>
+                            <div className="text-[11px] text-white/35">
+                              Select a file
+                            </div>
+
+                            <div className="mt-1 text-[9px] text-white/15">
+                              Browse repository source here.
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <ExplorerFileViewer
+                          repositoryId={
+                            selectedRepo.id
+                          }
+                          filePath={
+                            explorerOpenFile
+                          }
+                          onClose={() =>
+                            setExplorerOpenFile(
+                              null,
+                            )
+                          }
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            <div className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col">
+              {messages.length === 0 ? (
+                <div className="flex flex-1 flex-col justify-center py-10 lg:py-14">
+                  <div>
+                    <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.025] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.16em] text-white/25">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
+                      Codebase intelligence
+                    </div>
+
+                    <h2 className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
+                      Ask your codebase.
+                    </h2>
+
+                    <p className="mt-3 max-w-xl text-sm leading-6 text-white/30">
+                      Architecture, implementation,
+                      bugs and files — grounded in
+                      your indexed repository.
+                    </p>
+                  </div>
+
+                  <div className="mt-8 grid gap-2 sm:grid-cols-2">
+                    {QUICK_PROMPTS.map(
+                      ([label, prompt, icon]) => (
                         <button
                           key={prompt}
                           type="button"
-                          onClick={() => askQuestion(prompt)}
-                          disabled={!selectedRepo || !indexed || asking}
+                          onClick={() =>
+                            askQuestion(
+                              prompt,
+                            )
+                          }
+                          disabled={
+                            !selectedRepo ||
+                            !indexed ||
+                            asking
+                          }
                           className="group flex min-h-[68px] items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] p-3.5 text-left disabled:opacity-25"
                         >
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.025] text-[11px] text-white/35">
@@ -3458,44 +3556,61 @@ export default function Home() {
                             className="ml-auto mt-1 h-3.5 w-3.5 text-white/10"
                           />
                         </button>
-                      ))}
-                    </div>
+                      ),
+                    )}
+                  </div>
 
-                    {!selectedRepo && !loadingRepos && (
+                  {!selectedRepo &&
+                    !loadingRepos && (
                       <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.018] px-4 py-3 text-[10px] text-white/30">
-                        Select a workspace and connect a repository to start.
+                        Select a workspace and
+                        connect a repository to
+                        start.
                       </div>
                     )}
 
-                    {selectedRepo && !indexed && !indexing && (
+                  {selectedRepo &&
+                    !indexed &&
+                    !indexing && (
                       <div className="mt-5 flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.018] px-4 py-3">
                         <span className="text-[10px] text-white/35">
-                          Index this repository to unlock chat.
+                          Index this repository to
+                          unlock chat.
                         </span>
 
                         <button
                           type="button"
-                          onClick={indexRepository}
+                          onClick={
+                            indexRepository
+                          }
                           className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[10px] text-white/60 hover:bg-white/[0.05]"
                         >
                           Index
                         </button>
                       </div>
                     )}
-                  </div>
-                ) : (
-                  <div
-                    ref={chatScrollRef}
-                    onScroll={handleChatScroll}
-                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-6 pr-1"
-                  >
-                    <div className="space-y-8">
-                      {messages.map((message) => (
-                        <div key={message.id}>
-                          {message.role === "user" ? (
+                </div>
+              ) : (
+                <div
+                  ref={chatScrollRef}
+                  onScroll={
+                    handleChatScroll
+                  }
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-8"
+                >
+                  <div className="space-y-8">
+                    {messages.map(
+                      (message) => (
+                        <div
+                          key={message.id}
+                        >
+                          {message.role ===
+                          "user" ? (
                             <div className="flex justify-end">
                               <div className="max-w-[85%] rounded-2xl rounded-br-md bg-white/[0.07] px-4 py-3 text-sm leading-6 text-white/80">
-                                {message.content}
+                                {
+                                  message.content
+                                }
                               </div>
                             </div>
                           ) : (
@@ -3514,55 +3629,88 @@ export default function Home() {
                                         : "text-white/72"
                                   }`}
                                 >
-                                  {message.error || message.cancelled ? (
+                                  {message.error ||
+                                  message.cancelled ? (
                                     <div>
-                                      {message.content}
+                                      {
+                                        message.content
+                                      }
 
-                                      {message.error && message.prompt && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            retryQuestion(message.prompt)
-                                          }
-                                          className="ml-3 rounded-lg border border-white/[0.07] px-3 py-1.5 text-[10px] text-white/45"
-                                        >
-                                          Retry
-                                        </button>
-                                      )}
+                                      {message.error &&
+                                        message.prompt && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              retryQuestion(
+                                                message.prompt,
+                                              )
+                                            }
+                                            className="ml-3 rounded-lg border border-white/[0.07] px-3 py-1.5 text-[10px] text-white/45"
+                                          >
+                                            Retry
+                                          </button>
+                                        )}
                                     </div>
                                   ) : (
                                     <div className="markdown-content">
                                       <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
+                                        remarkPlugins={[
+                                          remarkGfm,
+                                        ]}
                                         components={{
-                                          p: ({ children }) => (
+                                          p: ({
+                                            children,
+                                          }) => (
                                             <p className="mb-4 last:mb-0">
-                                              {children}
+                                              {
+                                                children
+                                              }
                                             </p>
                                           ),
-                                          strong: ({ children }) => (
-                                            <strong className="font-semibold text-white">
-                                              {children}
-                                            </strong>
-                                          ),
-                                          ul: ({ children }) => (
+                                          strong:
+                                            ({
+                                              children,
+                                            }) => (
+                                              <strong className="font-semibold text-white">
+                                                {
+                                                  children
+                                                }
+                                              </strong>
+                                            ),
+                                          ul: ({
+                                            children,
+                                          }) => (
                                             <ul className="mb-4 list-disc space-y-1.5 pl-5">
-                                              {children}
+                                              {
+                                                children
+                                              }
                                             </ul>
                                           ),
-                                          ol: ({ children }) => (
+                                          ol: ({
+                                            children,
+                                          }) => (
                                             <ol className="mb-4 list-decimal space-y-1.5 pl-5">
-                                              {children}
+                                              {
+                                                children
+                                              }
                                             </ol>
                                           ),
-                                          h2: ({ children }) => (
+                                          h2: ({
+                                            children,
+                                          }) => (
                                             <h2 className="mb-3 mt-5 text-base font-semibold text-white">
-                                              {children}
+                                              {
+                                                children
+                                              }
                                             </h2>
                                           ),
-                                          h3: ({ children }) => (
+                                          h3: ({
+                                            children,
+                                          }) => (
                                             <h3 className="mb-2 mt-4 text-sm font-semibold text-white">
-                                              {children}
+                                              {
+                                                children
+                                              }
                                             </h3>
                                           ),
                                           code: ({
@@ -3572,88 +3720,149 @@ export default function Home() {
                                           }) =>
                                             inline ? (
                                               <code className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[12px] text-white/80">
-                                                {children}
+                                                {
+                                                  children
+                                                }
                                               </code>
                                             ) : (
-                                              <code className={className}>
-                                                {children}
+                                              <code
+                                                className={
+                                                  className
+                                                }
+                                              >
+                                                {
+                                                  children
+                                                }
                                               </code>
                                             ),
-                                          pre: ({ children }) => (
+                                          pre: ({
+                                            children,
+                                          }) => (
                                             <pre className="group relative mb-4 overflow-x-auto rounded-xl border border-white/[0.07] bg-black/35 p-4 text-[12px] leading-6 text-white/65">
-                                              {children}
+                                              {
+                                                children
+                                              }
                                             </pre>
                                           ),
                                         }}
                                       >
-                                        {message.content}
+                                        {
+                                          message.content
+                                        }
                                       </ReactMarkdown>
                                     </div>
                                   )}
                                 </div>
 
-                                {message.sources?.length > 0 && (
+                                {message.sources
+                                  ?.length >
+                                  0 && (
                                   <div className="mt-5 max-w-3xl">
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        setShowSources((current) => ({
-                                          ...current,
-                                          [message.id]: !current[message.id],
-                                        }))
+                                        setShowSources(
+                                          (
+                                            current,
+                                          ) => ({
+                                            ...current,
+                                            [message.id]:
+                                              !current[
+                                                message
+                                                  .id
+                                              ],
+                                          }),
+                                        )
                                       }
                                       className="flex items-center gap-2 px-1 py-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/25"
                                     >
-                                      {message.sources.length} sources
+                                      {
+                                        message
+                                          .sources
+                                          .length
+                                      }{" "}
+                                      sources
+
                                       <Icon
                                         name="chevron"
                                         className={`h-3 w-3 ${
-                                          showSources[message.id]
+                                          showSources[
+                                            message
+                                              .id
+                                          ]
                                             ? "rotate-180"
                                             : ""
                                         }`}
                                       />
                                     </button>
 
-                                    {showSources[message.id] && (
+                                    {showSources[
+                                      message.id
+                                    ] && (
                                       <div className="mt-2 space-y-1.5">
                                         {message.sources
-                                          .slice(0, 6)
-                                          .map((source, sourceIndex) => {
-                                            const sourceKey = `${message.id}-${source.file_path}-${source.start_line}-${sourceIndex}`;
+                                          .slice(
+                                            0,
+                                            6,
+                                          )
+                                          .map(
+                                            (
+                                              source,
+                                              sourceIndex,
+                                            ) => {
+                                              const sourceKey = `${message.id}-${source.file_path}-${source.start_line}-${sourceIndex}`;
 
-                                            return (
-                                              <SourceCard
-                                                key={sourceKey}
-                                                source={source}
-                                                expanded={
-                                                  expandedSource === sourceKey
-                                                }
-                                                onToggle={() =>
-                                                  setExpandedSource(
-                                                    (current) =>
-                                                      current === sourceKey
-                                                        ? null
-                                                        : sourceKey,
-                                                  )
-                                                }
-                                                onOpen={openSource}
-                                              />
-                                            );
-                                          })}
+                                              return (
+                                                <SourceCard
+                                                  key={
+                                                    sourceKey
+                                                  }
+                                                  source={
+                                                    source
+                                                  }
+                                                  expanded={
+                                                    expandedSource ===
+                                                    sourceKey
+                                                  }
+                                                  onToggle={() =>
+                                                    setExpandedSource(
+                                                      (
+                                                        current,
+                                                      ) =>
+                                                        current ===
+                                                        sourceKey
+                                                          ? null
+                                                          : sourceKey,
+                                                    )
+                                                  }
+                                                  onOpen={
+                                                    openSource
+                                                  }
+                                                />
+                                              );
+                                            },
+                                          )}
                                       </div>
                                     )}
                                   </div>
                                 )}
 
-                                <MessageMetrics metrics={message.metrics} />
+                                <MessageMetrics
+                                  metrics={
+                                    message.metrics
+                                  }
+                                />
 
                                 {message.id ===
-                                  messages[messages.length - 1]?.id &&
+                                  messages[
+                                    messages.length -
+                                      1
+                                  ]?.id &&
                                   !message.error &&
                                   !message.cancelled &&
                                   !asking &&
-                                  suggestedQuestions.length > 0 && (
+                                  suggestedQuestions.length >
+                                    0 && (
                                     <div className="mt-4 max-w-3xl">
                                       <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.15em] text-white/20">
                                         Continue exploring
@@ -3661,16 +3870,24 @@ export default function Home() {
 
                                       <div className="flex flex-wrap gap-2">
                                         {suggestedQuestions.map(
-                                          (suggestion) => (
+                                          (
+                                            suggestion,
+                                          ) => (
                                             <button
-                                              key={suggestion}
+                                              key={
+                                                suggestion
+                                              }
                                               type="button"
                                               onClick={() =>
-                                                askQuestion(suggestion)
+                                                askQuestion(
+                                                  suggestion,
+                                                )
                                               }
                                               className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-[10px] text-white/40"
                                             >
-                                              {suggestion}
+                                              {
+                                                suggestion
+                                              }
                                             </button>
                                           ),
                                         )}
@@ -3681,118 +3898,149 @@ export default function Home() {
                             </div>
                           )}
                         </div>
-                      ))}
+                      ),
+                    )}
 
-                      {asking && (
-                        <div className="ml-10 flex items-center gap-3">
-                          <div className="flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/45" />
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/25" />
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/15" />
-                          </div>
-
-                          <span className="text-[10px] text-white/25">
-                            {chatStage}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={cancelQuestion}
-                            className="rounded-md border border-white/[0.07] px-2 py-1 text-[9px] text-white/35"
-                          >
-                            Stop
-                          </button>
+                    {asking && (
+                      <div className="ml-10 flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/45" />
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/25" />
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/15" />
                         </div>
-                      )}
 
-                      {chatError && (
-                        <div className="rounded-xl border border-red-400/10 bg-red-400/[0.035] px-3 py-2 text-[10px] text-red-300/70">
-                          {chatError}
-                        </div>
-                      )}
-                    </div>
+                        <span className="text-[10px] text-white/25">
+                          {chatStage}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={
+                            cancelQuestion
+                          }
+                          className="rounded-md border border-white/[0.07] px-2 py-1 text-[9px] text-white/35"
+                        >
+                          Stop
+                        </button>
+                      </div>
+                    )}
+
+                    {chatError && (
+                      <div className="rounded-xl border border-red-400/10 bg-red-400/[0.035] px-3 py-2 text-[10px] text-red-300/70">
+                        {chatError}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+              )}
 
-                <div className="shrink-0 bg-[#08090b] pt-5">
-                  <div
-                    className={`rounded-2xl border bg-[#0d0f12]/95 p-2 ${
-                      asking ? "border-white/[0.13]" : "border-white/[0.08]"
-                    }`}
-                  >
-                    <textarea
-                      ref={questionRef}
-                      value={question}
-                      onChange={(event) => setQuestion(event.target.value)}
-                      onKeyDown={handleKeyDown}
-                      disabled={!selectedRepo || !indexed || asking}
-                      placeholder={
-                        !selectedRepo
-                          ? "Connect a repository to begin…"
-                          : !indexed
-                            ? "Index the repository to start asking…"
-                            : "Ask about your codebase…"
-                      }
-                      rows={2}
-                      maxLength={4000}
-                      className="w-full bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/20 disabled:cursor-not-allowed"
-                    />
+              <div className="shrink-0 bg-[#08090b] pt-5">
+                <div
+                  className={`rounded-2xl border bg-[#0d0f12]/95 p-2 ${
+                    asking
+                      ? "border-white/[0.13]"
+                      : "border-white/[0.08]"
+                  }`}
+                >
+                  <textarea
+                    ref={questionRef}
+                    value={question}
+                    onChange={(event) =>
+                      setQuestion(
+                        event.target.value,
+                      )
+                    }
+                    onKeyDown={
+                      handleKeyDown
+                    }
+                    disabled={
+                      !selectedRepo ||
+                      !indexed ||
+                      asking
+                    }
+                    placeholder={
+                      !selectedRepo
+                        ? "Connect a repository to begin…"
+                        : !indexed
+                          ? "Index the repository to start asking…"
+                          : "Ask about your codebase…"
+                    }
+                    rows={2}
+                    maxLength={4000}
+                    className="w-full bg-transparent px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/20 disabled:cursor-not-allowed"
+                  />
 
-                    <div className="flex items-center justify-between px-2 pb-1">
-                      <span className="hidden text-[9px] text-white/20 sm:block">
-                        Enter to send · Shift + Enter for a new line · Esc to
-                        stop
-                      </span>
+                  <div className="flex items-center justify-between px-2 pb-1">
+                    <span className="hidden text-[9px] text-white/20 sm:block">
+                      Enter to send · Shift +
+                      Enter for a new line ·
+                      Esc to stop
+                    </span>
 
-                      <span className="text-[9px] text-white/20 sm:hidden">
-                        Enter to send
-                      </span>
+                    <span className="text-[9px] text-white/20 sm:hidden">
+                      Enter to send
+                    </span>
 
-                      <div className="flex items-center gap-2">
-                        {messages.length > 0 && !asking && (
+                    <div className="flex items-center gap-2">
+                      {messages.length >
+                        0 &&
+                        !asking && (
                           <button
                             type="button"
-                            onClick={scrollToLatest}
+                            onClick={
+                              scrollToLatest
+                            }
                             className="rounded-lg border border-white/[0.07] px-2 py-1 text-[9px] text-white/30"
                           >
                             Latest
                           </button>
                         )}
 
-                        {asking ? (
-                          <button
-                            type="button"
-                            onClick={cancelQuestion}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.05]"
-                          >
-                            <Icon name="stop" className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => askQuestion()}
-                            disabled={
-                              !question.trim() || !selectedRepo || !indexed
-                            }
-                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-black disabled:opacity-20"
-                          >
-                            <Icon name="arrow" className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      {asking ? (
+                        <button
+                          type="button"
+                          onClick={
+                            cancelQuestion
+                          }
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.05]"
+                        >
+                          <Icon
+                            name="stop"
+                            className="h-3.5 w-3.5"
+                          />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            askQuestion()
+                          }
+                          disabled={
+                            !question.trim() ||
+                            !selectedRepo ||
+                            !indexed
+                          }
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-black disabled:opacity-20"
+                        >
+                          <Icon
+                            name="arrow"
+                            className="h-3.5 w-3.5"
+                          />
+                        </button>
+                      )}
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-center gap-2 py-2 text-[9px] text-white/15">
-                    <span>Grounded</span>
-                    <span>·</span>
-                    <span>Local</span>
-                    <span>·</span>
-                    <span>Private</span>
-                  </div>
+                <div className="flex items-center justify-center gap-2 py-2 text-[9px] text-white/15">
+                  <span>Grounded</span>
+                  <span>·</span>
+                  <span>Local</span>
+                  <span>·</span>
+                  <span>Private</span>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </section>
       </div>

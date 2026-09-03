@@ -327,6 +327,60 @@ def get_repository(
     return repo
 
 
+
+# ------------------------------------------------------------------
+# DISCONNECT REPOSITORY
+# ------------------------------------------------------------------
+
+@router.delete(
+    "/{repository_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def disconnect_repository(
+    repository_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    repo = repository_is_accessible(
+        db,
+        repository_id,
+        user,
+    )
+
+    if repo.workspace_id is not None:
+        require_permission(
+            db,
+            repo.workspace_id,
+            user,
+            "manage_workspace",
+        )
+
+    active_job = (
+        db.query(IndexJob)
+        .filter(
+            IndexJob.repository_id == repository_id,
+            IndexJob.status.in_(["queued", "running"]),
+        )
+        .first()
+    )
+
+    if active_job:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Repository is currently indexing. Wait for indexing to finish before disconnecting it.",
+        )
+
+    db.query(IndexJob).filter(
+        IndexJob.repository_id == repository_id,
+    ).delete(synchronize_session=False)
+
+    db.query(CodeChunk).filter(
+        CodeChunk.repository_id == repository_id,
+    ).delete(synchronize_session=False)
+
+    db.delete(repo)
+    db.commit()
+
 # ------------------------------------------------------------------
 # DASHBOARD
 # ------------------------------------------------------------------
